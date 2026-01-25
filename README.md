@@ -1,2 +1,11 @@
-# global-job-market-pipeline
-batch data pipeline for collecting, cleaning, and analyzing global job market data
+Global Job Market Intelligence Pipeline.
+Batch data engineering pipeline for collecting, cleaning, and analyzing job market data across regions and roles.
+
+What this project does:
+Collects job postings from online sources (batch).
+Cleans and standardizes raw job data using Python.
+Stores structured data in PostgreSQL.
+Enables SQL-based analysis of job demand, skills, and remote work trends.
+
+## Status
+🚧 In progress — actively being developed
