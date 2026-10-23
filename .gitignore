@@ -1,0 +1,168 @@
+# ============================================================================
+# SECRETS & ENVIRONMENT
+# ============================================================================
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+*.cert
+secrets/
+
+# ============================================================================
+# DATA FILES
+# ============================================================================
+# Raw and processed job data should stay out of Git.
+data/*
+*.json
+*.jsonl
+*.ndjson
+*.csv
+*.tsv
+*.parquet
+*.feather
+*.avro
+*.orc
+*.xlsx
+*.xls
+*.json.gz
+*.jsonl.gz
+*.csv.gz
+*.tsv.gz
+*.tar.gz
+*.zip
+*.gz
+
+# Backups of data files
+*.bak
+*.backup
+*.old
+
+# ============================================================================
+# DATABASE & LOCAL CACHE
+# ============================================================================
+*.db
+*.sqlite
+*.sqlite3
+*.database
+*.db-journal
+*.sqlite-journal
+*.sqlite3-journal
+*.db-wal
+*.db-shm
+
+# Temporary data files
+*.tmp
+*.temp
+
+# ============================================================================
+# PYTHON CACHE & BUILD
+# ============================================================================
+__pycache__/
+*.py[cod]
+*.pyc.*
+*_cpython-*.pyc
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+
+# Python virtual environments
+venv/
+env/
+.venv/
+ENV/
+
+# Poetry / Pipenv / pyenv
+poetry.lock
+Pipfile.lock
+.python-version
+
+# pip
+pip-log.txt
+pip-delete-this-directory.txt
+
+# ============================================================================
+# IDE & EDITOR
+# ============================================================================
+# VS Code
+.vscode/
+*.code-workspace
+
+# PyCharm / JetBrains
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim / Neovim
+*.swp
+*.swo
+*~
+.vim/
+
+# Emacs
+\#*\#
+.\#*
+
+# ============================================================================
+# JUPYTER & NOTEBOOKS
+# ============================================================================
+.ipynb_checkpoints/
+.jupyter/
+.jupyterlab/
+
+# ============================================================================
+# LOGS & TEMPORARY FILES
+# ============================================================================
+logs/*
+*.log
+*.out
+
+# Temporary directories
+.tmp/
+tmp/
+temp/
+
+# ============================================================================
+# TESTING & COVERAGE
+# ============================================================================
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.hypothesis/
+
+# ============================================================================
+# OS FILES
+# ============================================================================
+.DS_Store
+Thumbs.db
+desktop.ini
+.directory
+.AppleDouble
+.LSOverride
+._*
+
+# ============================================================================
+# DOCUMENTATION BUILDS
+# ============================================================================
+site/
+docs/_build/
+
+# ============================================================================
+# PLACEHOLDERS
+# ============================================================================
+!.gitkeep
+!/data/.gitkeep
+!/logs/.gitkeep
+pytest-cache-files-*/
