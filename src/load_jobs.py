@@ -25,9 +25,14 @@ def get_db_connection():
     Yield a psycopg2 connection and guarantee cleanup.
     """
     conn = None
-    connection_string = config.get_db_connection_string()
     try:
-        logger.info("Connecting to %s", connection_string)
+        logger.info(
+            "Connecting to database %s at %s:%s as user %s",
+            config.db_name,
+            config.db_host,
+            config.db_port,
+            config.db_user,
+        )
         conn = psycopg2.connect(
             host=config.db_host,
             port=config.db_port,
@@ -38,12 +43,11 @@ def get_db_connection():
         yield conn
     except psycopg2.OperationalError:
         logger.error(
-            "Database connection failed for %s.\n"
-            "Troubleshooting:\n"
-            "  1. Check PostgreSQL is running and reachable at the configured host/port.\n"
-            "  2. Check POSTGRES_USER, POSTGRES_PASSWORD, and POSTGRES_DB in .env.\n"
-            "  3. Confirm the database and role exist, and schema.sql has been applied.",
-            connection_string,
+            "Database connection failed for database %s at %s:%s as user %s.",
+            config.db_name,
+            config.db_host,
+            config.db_port,
+            config.db_user,
             exc_info=True,
         )
         raise

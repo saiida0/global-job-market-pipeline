@@ -92,3 +92,11 @@ def test_upsert_jobs_uses_fake_connection(monkeypatch):
 
 def test_parse_timestamp_returns_none_for_invalid_input():
     assert load_jobs.parse_timestamp("not-a-timestamp", "fetched_at") is None
+
+
+def test_parse_timestamp_treats_naive_remotive_datetime_as_utc():
+    timestamp = load_jobs.parse_timestamp(
+        "2026-10-20T10:30:00", "publication_date"
+    )
+
+    assert timestamp == datetime(2026, 10, 20, 10, 30, tzinfo=timezone.utc)

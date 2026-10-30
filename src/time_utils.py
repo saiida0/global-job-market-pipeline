@@ -11,7 +11,8 @@ def get_utc_now() -> datetime:
 
 def to_utc(dt: datetime) -> datetime:
     if dt.tzinfo is None or dt.tzinfo.utcoffset(dt) is None:
-        logger.warning("Naive datetime received; assuming local time: %r", dt)
+        logger.warning("Naive datetime received; assuming UTC: %r", dt)
+        return dt.replace(tzinfo=timezone.utc)
     return dt.astimezone(timezone.utc)
 
 
