@@ -4,6 +4,13 @@ Batch data pipeline for collecting remote job postings from Remotive, cleaning
 them into a consistent schema, and loading the result into PostgreSQL for
 analysis.
 
+What this project does:
+
+- Collects job postings from online sources (batch).
+- Cleans and standardizes raw job data using Python.
+- Stores structured data in PostgreSQL.
+- Enables SQL-based analysis of job demand, skills, and remote work trends.
+
 ## Project Structure
 
 ```text
@@ -58,6 +65,7 @@ To clean and load the newest existing raw snapshot without fetching from Remotiv
 ```powershell
 python -m src.reprocess
 ```
+
 ## Data Policy
 
 This project retains timestamped raw snapshots for each run.
