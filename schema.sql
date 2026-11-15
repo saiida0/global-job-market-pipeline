@@ -20,6 +20,33 @@ CREATE TABLE IF NOT EXISTS jobs (
     updated_at                  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS pipeline_runs (
+    id               BIGSERIAL PRIMARY KEY,
+    started_at       TIMESTAMPTZ NOT NULL,
+    finished_at      TIMESTAMPTZ NOT NULL,
+    status           TEXT NOT NULL CHECK (status IN ('success', 'failed')),
+    jobs_fetched     INTEGER NOT NULL DEFAULT 0,
+    jobs_cleaned     INTEGER NOT NULL DEFAULT 0,
+    jobs_skipped     INTEGER NOT NULL DEFAULT 0,
+    jobs_upserted    INTEGER NOT NULL DEFAULT 0,
+    reused_snapshot  BOOLEAN NOT NULL DEFAULT FALSE,
+    error_message    TEXT
+);
+
+CREATE TABLE IF NOT EXISTS daily_stats (
+    day               DATE PRIMARY KEY,
+    total_jobs        INTEGER NOT NULL DEFAULT 0,
+    jobs_with_salary  INTEGER NOT NULL DEFAULT 0,
+    updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS daily_skill_counts (
+    day    DATE NOT NULL,
+    skill  TEXT NOT NULL,
+    jobs   INTEGER NOT NULL,
+    PRIMARY KEY (day, skill)
+);
+
 CREATE INDEX IF NOT EXISTS idx_jobs_tags
     ON jobs USING GIN(tags);
 

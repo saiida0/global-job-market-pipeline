@@ -21,8 +21,9 @@ skills, salaries, and publication activity.
 |   |-- clean_jobs.py       # Cleaning and salary parsing
 |   |-- load_jobs.py        # PostgreSQL loading
 |   |-- main.py             # Pipeline orchestration
-|   +-- reprocess.py        # Reprocess a saved snapshot without fetching
-|-- schema.sql              # PostgreSQL table and indexes
+|   |-- reprocess.py        # Reprocess a saved snapshot without fetching
+|   +-- run_log.py          # Run history and daily statistics
+|-- schema.sql              # PostgreSQL tables and indexes
 |-- requirements.txt        # Python dependencies
 +-- .env.example             # Environment variable template
 ~~~
@@ -48,7 +49,8 @@ Copy .env.example to .env and fill in your PostgreSQL credentials:
 Copy-Item .env.example .env
 ~~~
 
-Create the database table with schema.sql before the first load.
+Create the database tables with schema.sql before the first load. It defines
+jobs, pipeline_runs, daily_stats, and daily_skill_counts.
 
 ## Run the Pipeline
 

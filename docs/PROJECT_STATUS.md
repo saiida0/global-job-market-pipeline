@@ -3,8 +3,8 @@
 ## Current Scope
 
 The project collects Remotive job listings, normalizes them, and loads them
-into PostgreSQL. The new local Streamlit dashboard summarizes the stored data
-without changing the pipeline code in src/.
+into PostgreSQL. The local Streamlit dashboard summarizes the stored data.
+Pipeline run history and daily job and skill snapshots are stored in PostgreSQL.
 
 ## Dashboard
 
@@ -18,6 +18,24 @@ without changing the pipeline code in src/.
   are excluded.
 - Query and shaping helpers live in dashboard/queries.py, with pandas-only
   tests in tests/test_dashboard_queries.py.
+
+## Run History and Daily Statistics
+
+src/run_log.py records one pipeline_runs row for each completed or failed
+pipeline attempt. Failure records contain a short generic error message so
+exception text and credentials are not persisted.
+
+After a successful load, the pipeline snapshots total jobs, jobs with salary,
+and counts per tag for the current UTC date. daily_stats is upserted by day;
+daily_skill_counts is refreshed for that day using its (day, skill) key, so a
+same-day rerun replaces the snapshot instead of adding duplicate rows.
+
+Apply schema.sql to create these PostgreSQL tables:
+
+- jobs
+- pipeline_runs
+- daily_stats
+- daily_skill_counts
 
 ## Data Attribution
 
