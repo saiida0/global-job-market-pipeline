@@ -20,6 +20,13 @@ CREATE TABLE IF NOT EXISTS jobs (
     updated_at                  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS extracted_job_skills (
+    job_id            BIGINT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+    skill_name        TEXT NOT NULL,
+    extractor_version TEXT NOT NULL,
+    PRIMARY KEY (job_id, skill_name)
+);
+
 CREATE TABLE IF NOT EXISTS pipeline_runs (
     id               BIGSERIAL PRIMARY KEY,
     started_at       TIMESTAMPTZ NOT NULL,
@@ -64,6 +71,9 @@ CREATE INDEX IF NOT EXISTS idx_jobs_salary_min
 
 CREATE INDEX IF NOT EXISTS idx_jobs_source
     ON jobs(source);
+
+CREATE INDEX IF NOT EXISTS idx_extracted_job_skills_skill_name
+    ON extracted_job_skills(skill_name);
 
 CREATE OR REPLACE FUNCTION set_updated_at()
 RETURNS TRIGGER AS $$

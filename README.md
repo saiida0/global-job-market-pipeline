@@ -19,6 +19,7 @@ skills, salaries, and publication activity.
 |-- src/
 |   |-- fetch_jobs.py       # Remotive API ingestion
 |   |-- clean_jobs.py       # Cleaning and salary parsing
+|   |-- skill_extractor.py  # Dictionary-based job skill extraction
 |   |-- load_jobs.py        # PostgreSQL loading
 |   |-- main.py             # Pipeline orchestration
 |   |-- reprocess.py        # Reprocess a saved snapshot without fetching
@@ -50,7 +51,7 @@ Copy-Item .env.example .env
 ~~~
 
 Create the database tables with schema.sql before the first load. It defines
-jobs, pipeline_runs, daily_stats, and daily_skill_counts.
+jobs, extracted_job_skills, pipeline_runs, daily_stats, and daily_skill_counts.
 
 ## Run the Pipeline
 
@@ -67,6 +68,24 @@ snapshot is less than 6 hours old, the pipeline reuses it instead of making
 another API request. Remotive advises a maximum of 4 fetches per day and blocks
 requests over 2 per minute. Set FORCE_FETCH=true in .env to force a live
 fetch despite the reuse guard; the default is FORCE_FETCH=false.
+
+## Skill Extraction
+
+During cleaning, the pipeline checks each job title and description against a
+deterministic, case-insensitive skills dictionary. It writes canonical matches
+to `extracted_skills` in the cleaned JSON and stores them in the separate
+`extracted_job_skills` table with the extractor version. Remotive-provided
+`tags` remain a separate field and are not replaced by extracted skills.
+
+Descriptions are not included in cleaned JSON or PostgreSQL. Raw snapshots are
+kept unchanged for reprocessing, so they continue to contain the full API
+response, including descriptions when supplied. The existing
+`daily_skill_counts` snapshot still counts Remotive tags.
+
+The initial dictionary only finds listed terms and aliases. It can miss
+unlisted skills and may match ambiguous terms such as “Spark” without enough
+context; it does not infer related skills or understand synonyms beyond the
+configured aliases.
 
 To clean and load the newest existing raw snapshot without fetching from
 Remotive, run:

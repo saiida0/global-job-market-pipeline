@@ -11,6 +11,7 @@ import psycopg2
 from psycopg2.extras import execute_values
 
 from .config import config
+from .skill_extractor import EXTRACTOR_VERSION
 from .time_utils import get_utc_now, to_utc
 
 
@@ -129,7 +130,37 @@ def build_rows(jobs: list) -> tuple[list, int]:
     return rows, skipped
 
 
-def upsert_jobs(rows: list, connection) -> dict:
+def build_skill_rows(jobs: list) -> list[tuple]:
+    """Map extracted skills to rows for the extracted_job_skills table."""
+    rows = []
+    seen = set()
+    for job in jobs:
+        if not isinstance(job, dict) or not _has_required_fields(job):
+            continue
+
+        skills = job.get("extracted_skills")
+        if isinstance(skills, str):
+            skills = [skills]
+        if not isinstance(skills, (list, tuple)):
+            continue
+
+        for skill in skills:
+            if not isinstance(skill, str) or not skill.strip():
+                continue
+            skill_name = skill.strip()
+            key = (job["id"], skill_name.casefold())
+            if key in seen:
+                continue
+            seen.add(key)
+            rows.append((job["id"], skill_name, EXTRACTOR_VERSION))
+    return rows
+
+
+def upsert_jobs(
+    rows: list,
+    connection,
+    skill_rows: list[tuple] | None = None,
+) -> dict:
     """
     Bulk upsert job rows into PostgreSQL.
     """
@@ -175,6 +206,26 @@ def upsert_jobs(rows: list, connection) -> dict:
 
     with connection.cursor() as cursor:
         execute_values(cursor, query, rows)
+        if skill_rows is not None:
+            job_ids = list(dict.fromkeys(row[0] for row in rows))
+            cursor.execute(
+                "DELETE FROM extracted_job_skills WHERE job_id = ANY(%s)",
+                (job_ids,),
+            )
+            if skill_rows:
+                execute_values(
+                    cursor,
+                    """
+                    INSERT INTO extracted_job_skills (
+                        job_id,
+                        skill_name,
+                        extractor_version
+                    ) VALUES %s
+                    ON CONFLICT (job_id, skill_name) DO UPDATE SET
+                        extractor_version = EXCLUDED.extractor_version
+                    """,
+                    skill_rows,
+                )
     connection.commit()
 
     count = len(rows)
@@ -188,9 +239,10 @@ def main(processed_file_path: str | None = None) -> dict:
 
     jobs = load_processed_jobs(file_path)
     rows, skipped = build_rows(jobs)
+    skill_rows = build_skill_rows(jobs)
 
     with get_db_connection() as connection:
-        result = upsert_jobs(rows, connection)
+        result = upsert_jobs(rows, connection, skill_rows)
 
     result["skipped"] = skipped
     if result["upserted"] == 0:

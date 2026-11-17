@@ -7,6 +7,7 @@ from datetime import datetime
 from pathlib import Path
 
 from .schemas import CleanedJob, SalaryRange
+from .skill_extractor import extract_skills
 from .time_utils import to_utc
 from .validators import ValidationError, validate_int, validate_list, validate_string
 
@@ -162,6 +163,10 @@ def clean_job(raw_job: dict) -> CleanedJob | None:
                 allow_empty=True,
             ),
             tags=validate_list(raw_job.get("tags"), "tags", item_type=str),
+            extracted_skills=extract_skills(
+                description=raw_job.get("description"),
+                title=raw_job.get("title"),
+            ),
             url=validate_string(raw_job.get("url"), "url", allow_empty=True),
             salary=salary,
             publication_date=parse_datetime(

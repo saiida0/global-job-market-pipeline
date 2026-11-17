@@ -1,6 +1,6 @@
 import pytest
 
-from src.clean_jobs import SalaryParser
+from src.clean_jobs import SalaryParser, clean_job
 from src.schemas import CleanedJob, SalaryRange
 from src.validators import (
     ValidationError,
@@ -115,6 +115,52 @@ def test_cleaned_job_valid_creation():
     assert job.title == "Software Engineer"
     assert job.company == "TechCorp"
     assert job.tags == ["python", "aws"]
+
+
+def test_clean_job_extracts_skills_without_storing_description_or_changing_tags():
+    raw_job = {
+        "id": 12345,
+        "title": "Excel and Python Engineer",
+        "company_name": "TechCorp",
+        "description": "<p>Build services with AWS and JavaScript.</p>",
+        "tags": ["Python", "Custom Tag"],
+    }
+
+    job = clean_job(raw_job)
+
+    assert job is not None
+    assert job.extracted_skills == ["Python", "JavaScript", "AWS", "Excel"]
+    assert job.tags == ["python", "custom tag"]
+    assert "description" not in job.to_dict()
+    assert job.to_dict()["extracted_skills"] == job.extracted_skills
+
+
+def test_clean_job_handles_missing_description_and_extracts_from_title():
+    job = clean_job(
+        {
+            "id": 12346,
+            "title": "Kubernetes Engineer",
+            "company_name": "TechCorp",
+        }
+    )
+
+    assert job is not None
+    assert job.extracted_skills == ["Kubernetes"]
+    assert job.tags == []
+
+
+def test_clean_job_with_no_matching_title_or_description_has_no_extracted_skills():
+    job = clean_job(
+        {
+            "id": 12347,
+            "title": "Generalist",
+            "company_name": "TechCorp",
+            "description": "",
+        }
+    )
+
+    assert job is not None
+    assert job.extracted_skills == []
 
 
 def test_cleaned_job_rejects_missing_required_fields():

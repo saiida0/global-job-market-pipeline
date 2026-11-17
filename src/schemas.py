@@ -85,6 +85,7 @@ class CleanedJob:
     url: str | None = None
     tags: list[str] = field(default_factory=list)
     fetched_at: datetime | None = None
+    extracted_skills: list[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         if self.id is None:
@@ -126,6 +127,7 @@ class CleanedJob:
             "job_type": self.job_type,
             "location": self.location,
             "tags": self.tags,
+            "extracted_skills": self.extracted_skills,
             "url": self.url,
             "salary_min": salary_min,
             "salary_max": salary_max,

@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 
 from src import load_jobs
+from src.skill_extractor import EXTRACTOR_VERSION
 
 
 def valid_job():
@@ -18,6 +19,7 @@ def valid_job():
         "category": "Software",
         "job_type": "full_time",
         "tags": ["Python", "SQL"],
+        "extracted_skills": ["Python", "Apache Spark"],
         "url": "https://example.test/jobs/42",
     }
 
@@ -47,6 +49,20 @@ def test_build_rows_column_order_and_skipped_required_fields():
         ["Python", "SQL"],
         "https://example.test/jobs/42",
     )
+
+
+def test_build_skill_rows_keeps_extracted_skills_separate_and_deduplicated():
+    job = valid_job()
+    job["extracted_skills"] = ["Python", "Python", " Apache Spark ", "python"]
+
+    rows = load_jobs.build_skill_rows(
+        [job, {"id": 3, "title": "Missing company", "extracted_skills": ["SQL"]}]
+    )
+
+    assert rows == [
+        (42, "Python", EXTRACTOR_VERSION),
+        (42, "Apache Spark", EXTRACTOR_VERSION),
+    ]
 
 
 def test_upsert_jobs_uses_fake_connection(monkeypatch):
@@ -88,6 +104,66 @@ def test_upsert_jobs_uses_fake_connection(monkeypatch):
     assert captured["rows"] == rows
     assert "INSERT INTO jobs" in captured["query"]
     assert "ON CONFLICT (id) DO UPDATE" in captured["query"]
+
+
+def test_upsert_jobs_replaces_extracted_skill_rows_idempotently(monkeypatch):
+    operations = []
+
+    class FakeCursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc_value, traceback):
+            return False
+
+        def execute(self, query, params):
+            operations.append(("execute", query, params))
+
+    class FakeConnection:
+        def __init__(self):
+            self.commits = 0
+
+        def cursor(self):
+            return FakeCursor()
+
+        def commit(self):
+            self.commits += 1
+
+    def fake_execute_values(cursor, query, rows):
+        operations.append(("values", query, list(rows)))
+
+    monkeypatch.setattr(load_jobs, "execute_values", fake_execute_values)
+    job_rows, _ = load_jobs.build_rows([valid_job()])
+    skill_rows = load_jobs.build_skill_rows([valid_job()])
+    connection = FakeConnection()
+
+    first_result = load_jobs.upsert_jobs(job_rows, connection, skill_rows)
+    second_result = load_jobs.upsert_jobs(job_rows, connection, skill_rows)
+
+    assert first_result == second_result == {"upserted": 1}
+    assert connection.commits == 2
+    deletes = [
+        operation
+        for operation in operations
+        if operation[0] == "execute"
+        and "DELETE FROM extracted_job_skills" in operation[1]
+    ]
+    skill_inserts = [
+        operation
+        for operation in operations
+        if operation[0] == "values"
+        and "INSERT INTO extracted_job_skills" in operation[1]
+    ]
+    assert [operation[2] for operation in deletes] == [([42],), ([42],)]
+    assert [operation[2] for operation in skill_inserts] == [skill_rows, skill_rows]
+    assert all(
+        "ON CONFLICT (job_id, skill_name) DO UPDATE" in operation[1]
+        for operation in skill_inserts
+    )
+    for start in (0, 3):
+        assert operations[start][0] == "values"
+        assert operations[start + 1][0] == "execute"
+        assert operations[start + 2][0] == "values"
 
 
 def test_parse_timestamp_returns_none_for_invalid_input():
