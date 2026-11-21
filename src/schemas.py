@@ -86,6 +86,8 @@ class CleanedJob:
     tags: list[str] = field(default_factory=list)
     fetched_at: datetime | None = None
     extracted_skills: list[str] = field(default_factory=list)
+    source: str = "remotive"
+    source_id: str | None = None
 
     def __post_init__(self) -> None:
         if self.id is None:
@@ -96,6 +98,13 @@ class CleanedJob:
             raise ValueError(f"CleanedJob.id must be an integer, got {self.id!r}.") from exc
         if self.id <= 0:
             raise ValueError(f"CleanedJob.id must be positive, got {self.id!r}.")
+
+        if not isinstance(self.source, str) or not self.source.strip():
+            raise ValueError("CleanedJob.source is required.")
+        self.source = self.source.strip().lower()
+        self.source_id = str(self.id) if self.source_id is None else str(self.source_id).strip()
+        if not self.source_id:
+            raise ValueError("CleanedJob.source_id is required.")
 
         for field_name in ("title", "company"):
             value = getattr(self, field_name)
@@ -121,6 +130,8 @@ class CleanedJob:
 
         return {
             "id": self.id,
+            "source": self.source,
+            "source_id": self.source_id,
             "title": self.title,
             "company": self.company,
             "category": self.category,

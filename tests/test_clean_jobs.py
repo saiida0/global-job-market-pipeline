@@ -112,6 +112,8 @@ def test_cleaned_job_valid_creation():
     )
 
     assert job.id == 12345
+    assert job.source == "remotive"
+    assert job.source_id == "12345"
     assert job.title == "Software Engineer"
     assert job.company == "TechCorp"
     assert job.tags == ["python", "aws"]

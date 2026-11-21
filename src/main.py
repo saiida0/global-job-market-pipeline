@@ -5,6 +5,8 @@ from datetime import datetime, timezone
 from .clean_jobs import main as clean_jobs
 from .config import config
 from .fetch_jobs import fetch_remote_jobs
+from .jobicy import clean_jobs as clean_jobicy_jobs
+from .jobicy import fetch_jobs as fetch_jobicy_jobs
 from .load_jobs import main as load_jobs
 from .logging_config import setup_logging
 from .run_log import record_daily_stats, record_pipeline_run
@@ -33,6 +35,8 @@ def main() -> None:
         "error": None,
     }
     start = time.perf_counter()
+    source_errors = []
+    loaded_any_source = False
 
     try:
         setup_logging(log_level="INFO")
@@ -45,39 +49,67 @@ def main() -> None:
             config.db_user,
         )
 
-        logger.info("Step 1/3: fetching jobs")
-        ingestion_result = fetch_remote_jobs()
-        run_fields["jobs_fetched"] = ingestion_result.get("job_count", 0)
-        run_fields["reused_snapshot"] = ingestion_result.get("reused", False)
-        logger.info(
-            "Fetching complete: %s jobs fetched at %s",
-            ingestion_result["job_count"],
-            ingestion_result["fetched_at"],
+        source_pipelines = (
+            ("Remotive", fetch_remote_jobs, clean_jobs),
+            ("Jobicy", fetch_jobicy_jobs, clean_jobicy_jobs),
         )
+        for source_name, fetch_source, clean_source in source_pipelines:
+            try:
+                if source_name == "Remotive":
+                    logger.info("Step 1/3: fetching jobs")
+                else:
+                    logger.info("Step 1/3: fetching %s jobs", source_name)
+                ingestion_result = fetch_source()
+                run_fields["jobs_fetched"] += ingestion_result.get("job_count", 0)
+                run_fields["reused_snapshot"] = (
+                    run_fields["reused_snapshot"]
+                    or ingestion_result.get("reused", False)
+                )
+                logger.info(
+                    "Fetching complete: %s jobs fetched at %s",
+                    ingestion_result["job_count"],
+                    ingestion_result["fetched_at"],
+                )
 
-        logger.info("Step 2/3: cleaning jobs")
-        processing_result = clean_jobs(ingestion_result["file_path"])
-        run_fields["jobs_cleaned"] = processing_result.get("total", 0)
-        run_fields["jobs_skipped"] = processing_result.get("skipped", 0)
-        logger.info(
-            "Cleaning complete: %s jobs cleaned (%s with salary, %s without, %s skipped)",
-            processing_result["total"],
-            processing_result["with_salary"],
-            processing_result["without_salary"],
-            processing_result.get("skipped", 0),
-        )
+                if source_name == "Remotive":
+                    logger.info("Step 2/3: cleaning jobs")
+                else:
+                    logger.info("Step 2/3: cleaning %s jobs", source_name)
+                processing_result = clean_source(ingestion_result["file_path"])
+                run_fields["jobs_cleaned"] += processing_result.get("total", 0)
+                run_fields["jobs_skipped"] += processing_result.get("skipped", 0)
+                logger.info(
+                    "Cleaning complete: %s jobs cleaned (%s with salary, "
+                    "%s without, %s skipped)",
+                    processing_result["total"],
+                    processing_result.get("with_salary", 0),
+                    processing_result.get("without_salary", 0),
+                    processing_result.get("skipped", 0),
+                )
 
-        logger.info("Step 3/3: loading jobs")
-        loading_result = load_jobs(processing_result["file_path"])
-        run_fields["jobs_upserted"] = loading_result.get("upserted", 0)
-        run_fields["jobs_skipped"] += loading_result.get("skipped", 0)
-        logger.info(
-            "Loading complete: %s rows upserted (%s skipped)",
-            loading_result["upserted"],
-            loading_result.get("skipped", 0),
-        )
+                if source_name == "Remotive":
+                    logger.info("Step 3/3: loading jobs")
+                else:
+                    logger.info("Step 3/3: loading %s jobs", source_name)
+                loading_result = load_jobs(processing_result["file_path"])
+                run_fields["jobs_upserted"] += loading_result.get("upserted", 0)
+                run_fields["jobs_skipped"] += loading_result.get("skipped", 0)
+                logger.info(
+                    "Loading complete: %s rows upserted (%s skipped)",
+                    loading_result.get("upserted", 0),
+                    loading_result.get("skipped", 0),
+                )
+                loaded_any_source = True
+            except Exception as error:
+                source_errors.append(error)
+                logger.error(
+                    "%s source failed (%s).", source_name, type(error).__name__
+                )
 
-        record_daily_stats(datetime.now(timezone.utc).date())
+        if loaded_any_source:
+            record_daily_stats(datetime.now(timezone.utc).date())
+        if source_errors:
+            raise source_errors[0]
 
         elapsed = time.perf_counter() - start
         logger.info("Pipeline completed successfully in %.2fs", elapsed)

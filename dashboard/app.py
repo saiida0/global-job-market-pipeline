@@ -132,6 +132,6 @@ else:
 
 st.divider()
 st.caption(
-    "Job data from the Remotive API (https://remotive.com). Each listing links "
-    "to its original Remotive posting. Private, non-commercial academic project."
+    "Job data from [Remotive](https://remotive.com) and [Jobicy](https://jobicy.com). "
+    "Each listing links to its original posting. Private, non-commercial academic project."
 )
