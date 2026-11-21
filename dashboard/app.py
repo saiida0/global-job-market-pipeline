@@ -1,37 +1,63 @@
-"""Local, read-only dashboard for the Remotive job listings database."""
+"""Local, read-only dashboard for jobs from all configured sources."""
 
 from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 import streamlit as st
 
 from dashboard.queries import (
+    fetch_extracted_job_skills,
     fetch_jobs,
+    fetch_pipeline_runs,
     filter_jobs,
     filter_options,
     jobs_by_category,
     jobs_table,
+    pipeline_runs_table,
     postings_per_day,
     salary_by_category,
+    search_jobs,
     skills_counts,
     summary_metrics,
+    tracked_skill_job_count,
 )
 
 
 @st.cache_data(ttl=300, show_spinner="Loading jobs from PostgreSQL...")
 def load_jobs():
-    """Cache the read-only database query for five minutes."""
+    """Cache the read-only job query for five minutes."""
     return fetch_jobs()
+
+
+@st.cache_data(ttl=300, show_spinner="Loading extracted skills...")
+def load_extracted_skills():
+    """Cache the read-only extracted-skill query for five minutes."""
+    return fetch_extracted_job_skills()
+
+
+@st.cache_data(ttl=60, show_spinner="Loading pipeline status...")
+def load_pipeline_runs():
+    """Cache recent pipeline runs for one minute."""
+    return fetch_pipeline_runs()
 
 
 st.set_page_config(page_title="Global Job Market Dashboard", layout="wide")
 st.title("Global Job Market Dashboard")
-st.caption("Remotive job postings collected by the local pipeline.")
+st.caption("Remote job postings from Remotive and Jobicy")
 
 try:
     all_jobs = load_jobs()
+    extracted_skills = load_extracted_skills()
+    pipeline_runs = load_pipeline_runs()
 except Exception:
     st.error(
-        "Unable to load jobs from PostgreSQL. Check that the database is "
+        "Unable to load dashboard data from PostgreSQL. Check that the database is "
         "reachable and that the local .env database settings are valid, then "
         "rerun the dashboard."
     )
@@ -39,20 +65,27 @@ except Exception:
 
 with st.sidebar:
     st.header("Filters")
+    source_options = filter_options(all_jobs, "source")
     categories = filter_options(all_jobs, "category")
     job_types = filter_options(all_jobs, "job_type")
     locations = filter_options(all_jobs, "location")
 
+    selected_sources = st.multiselect(
+        "Source", source_options, default=source_options
+    )
     category_choice = st.selectbox("Category", ["All categories", *categories])
     job_type_choice = st.selectbox("Job type", ["All job types", *job_types])
     location_choice = st.selectbox("Location", ["All locations", *locations])
+    search_term = st.text_input("Search title or company", placeholder="Search jobs")
 
 selected_jobs = filter_jobs(
     all_jobs,
     category=None if category_choice == "All categories" else category_choice,
     job_type=None if job_type_choice == "All job types" else job_type_choice,
     location=None if location_choice == "All locations" else location_choice,
+    sources=selected_sources,
 )
+selected_jobs = search_jobs(selected_jobs, search_term)
 
 metrics = summary_metrics(selected_jobs)
 recent_update = metrics["most_recent_update"]
@@ -69,7 +102,7 @@ metric_columns[2].metric("Categories", f"{metrics['category_count']:,}")
 metric_columns[3].metric("Most recent update", recent_label)
 
 if all_jobs.empty:
-    st.info("No Remotive jobs are available in the database yet.")
+    st.info("No jobs are available in the database yet.")
 elif selected_jobs.empty:
     st.info("No jobs match these filters. Adjust the sidebar filters to see results.")
 
@@ -78,11 +111,24 @@ st.caption(f"Showing {len(selected_jobs):,} of {len(all_jobs):,} jobs.")
 skills_column, category_column = st.columns(2)
 with skills_column:
     st.subheader("Most demanded skills")
-    skill_data = skills_counts(selected_jobs).head(15)
+    skill_data = skills_counts(selected_jobs, extracted_skills).head(15)
     if skill_data.empty:
-        st.info("No skill tags are available for these jobs.")
+        st.info("No tracked skills are available for these jobs.")
     else:
-        st.bar_chart(skill_data.set_index("skill")["job_count"])
+        st.bar_chart(
+            skill_data,
+            x="skill",
+            y="job_count",
+            horizontal=True,
+            sort="-job_count",
+            width="stretch",
+            alt="Top extracted skills ranked by the number of matching jobs",
+        )
+    tracked_jobs = tracked_skill_job_count(selected_jobs, extracted_skills)
+    st.caption(
+        f"Based on {tracked_jobs:,} jobs with at least one tracked skill "
+        f"(of {len(selected_jobs):,} jobs)"
+    )
 
 with category_column:
     st.subheader("Jobs per category")
@@ -90,17 +136,37 @@ with category_column:
     if category_data.empty:
         st.info("No category data is available for these jobs.")
     else:
-        st.bar_chart(category_data.set_index("category")["job_count"])
+        st.bar_chart(
+            category_data,
+            x="category",
+            y="job_count",
+            horizontal=True,
+            sort="-job_count",
+            width="stretch",
+            alt="Job counts by shared category",
+        )
+    st.caption(f"Based on {len(selected_jobs):,} jobs")
 
 salary_column, posting_column = st.columns(2)
 with salary_column:
     st.subheader("Salary by category")
-    st.caption("Yearly USD only; hourly and non-USD salaries are excluded.")
     salary_data = salary_by_category(selected_jobs)
     if salary_data.empty:
         st.info("No yearly USD salary data is available for these jobs.")
     else:
-        st.bar_chart(salary_data.set_index("category")["median_salary_usd"])
+        st.bar_chart(
+            salary_data,
+            x="category",
+            y="median_salary_usd",
+            horizontal=True,
+            sort="-median_salary_usd",
+            width="stretch",
+            alt="Median salary by category for yearly USD listings",
+        )
+    st.caption(
+        f"Based on {salary_data.attrs.get('jobs_used', 0):,} jobs "
+        "(yearly USD only; hourly and non-USD salaries are excluded)"
+    )
 
 with posting_column:
     st.subheader("Postings per day")
@@ -111,7 +177,15 @@ with posting_column:
         posting_data = posting_data.assign(
             publication_day=posting_data["publication_day"].astype(str)
         )
-        st.line_chart(posting_data.set_index("publication_day")["job_count"])
+        st.line_chart(
+            posting_data,
+            x="publication_day",
+            y="job_count",
+            width="stretch",
+            alt="Number of selected job postings by publication day",
+        )
+    dated_jobs = int(posting_data["job_count"].sum()) if not posting_data.empty else 0
+    st.caption(f"Based on {dated_jobs:,} jobs with a publication date")
 
 st.subheader("Job listings")
 table_data = jobs_table(selected_jobs)
@@ -120,14 +194,42 @@ if table_data.empty:
 else:
     st.dataframe(
         table_data,
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
+        alt="Newest job listings with source and original posting links",
         column_config={
             "Original posting": st.column_config.LinkColumn(
-                "Original Remotive posting",
+                "Original posting",
                 display_text="Open posting",
             )
         },
+    )
+
+st.subheader("Pipeline status")
+run_table = pipeline_runs_table(pipeline_runs)
+if run_table.empty:
+    st.info("No pipeline runs are recorded yet.")
+else:
+    latest_run = run_table.iloc[0]
+    latest_time = latest_run["Finished at"]
+    latest_time_label = (
+        latest_time.strftime("%Y-%m-%d %H:%M UTC")
+        if latest_time is not None and str(latest_time) != 'NaT'
+        else "—"
+    )
+    run_metrics = st.columns(6)
+    run_metrics[0].metric("Latest run", latest_time_label)
+    run_metrics[1].metric("Status", str(latest_run["Status"]).title())
+    run_metrics[2].metric("Jobs fetched", f"{latest_run['Jobs fetched']:,}")
+    run_metrics[3].metric("Jobs cleaned", f"{latest_run['Jobs cleaned']:,}")
+    run_metrics[4].metric("Jobs skipped", f"{latest_run['Jobs skipped']:,}")
+    run_metrics[5].metric("Jobs upserted", f"{latest_run['Jobs upserted']:,}")
+    st.caption("Last 5 runs")
+    st.dataframe(
+        run_table,
+        width="stretch",
+        hide_index=True,
+        alt="The five most recent pipeline runs and their job counts",
     )
 
 st.divider()

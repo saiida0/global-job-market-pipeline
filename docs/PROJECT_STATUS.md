@@ -19,17 +19,24 @@ combined run totals and exits unsuccessfully if either source fails.
 
 ## Dashboard
 
-- Run from the project root with streamlit run dashboard/app.py.
-- Currently reads Remotive rows from PostgreSQL using the shared settings in
-  src/config.py; Jobicy dashboard queries remain a TODO.
-- Uses a read-only PostgreSQL transaction and caches results for 300 seconds.
-- Filters listings by category, job type, and location.
-- Shows job and salary metrics, tagged skills, category totals, yearly USD
-  salary summaries, publication dates, and links to original postings.
-- The salary chart uses only yearly USD listings; hourly and non-USD salaries
-  are excluded.
-- Query and shaping helpers live in dashboard/queries.py, with pandas-only
-  tests in tests/test_dashboard_queries.py.
+- Run from the project root with `streamlit run dashboard/app.py`.
+- Reads jobs from all sources in a read-only PostgreSQL transaction and caches
+  results for 300 seconds. The app adds the project root to `sys.path` so this
+  command works when launched from the project root.
+- Filters by source, shared category, job type, and location. The sidebar search
+  matches title or company without regard to case.
+- Maps provider category labels to shared dashboard names in
+  `src/categories.py`; stored database values are unchanged.
+- Shows job and salary metrics, extracted skills from `extracted_job_skills`,
+  horizontal category and yearly USD salary charts, publication dates, and
+  newest-first links to original postings. Listings show their source.
+- The skills chart counts distinct jobs with each extracted skill and reports
+  coverage against the selected jobs. The salary chart uses yearly USD only and
+  reports how many jobs contributed estimates.
+- The Pipeline status section shows the latest run and its counts, plus the
+  last five runs. It has an empty state for a database without run history.
+- Query and shaping helpers live in `dashboard/queries.py`, with fake-data,
+  pandas-only tests in `tests/test_dashboard_queries.py`.
 
 ## Run History and Daily Statistics
 
@@ -73,8 +80,9 @@ Jobs are keyed by `(source, source_id)`. The loader defaults missing sources to
 `remotive` and converts the existing Remotive numeric `id` to text for
 `source_id`, preserving its current identity. Extracted skills use the same
 composite job key and cascade deletes through a matching foreign key. Daily
-tag snapshots count distinct `(source, source_id)` pairs. The dashboard still
-shows Remotive listings and keeps its existing layout.
+tag snapshots count distinct `(source, source_id)` pairs. The dashboard reads
+both sources and maps category labels at display time without changing stored
+values.
 
 For a fresh database, apply schema.sql. For an existing database, run
 `migrations/001_composite_job_key.sql` once in pgAdmin before using the updated
@@ -82,8 +90,6 @@ loader or dashboard.
 
 ## Remaining TODOs
 
-- Add dashboard queries for Jobicy listings while preserving the current
-  dashboard layout.
 - Use Jobicy `/api/jobs/status` to mark closed jobs.
 - Choose a scheduled pipeline run minute other than minute 00.
 - Add provider-specific fetch and cleaning steps before ingesting sources other
