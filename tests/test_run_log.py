@@ -26,7 +26,7 @@ class FakeCursor:
         return None
 
     def fetchall(self):
-        if "COUNT(DISTINCT jobs.id)" in self.current_query:
+        if "COUNT(DISTINCT (jobs.source, jobs.source_id))" in self.current_query:
             return [("Python", 7), ("SQL", 4)]
         return []
 

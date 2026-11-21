@@ -38,12 +38,11 @@ def test_build_rows_column_order_and_skipped_required_fields():
     assert len(rows) == 1
     row = rows[0]
     assert len(row) == 15
-    assert row[0:4] == (42, "Data Engineer", "Example Co", "Remote")
-    assert row[4:8] == (100000, 120000, "yearly", "USD")
-    assert row[8] == datetime(2026, 10, 20, 10, 30, tzinfo=timezone.utc)
-    assert row[9] == datetime(2026, 10, 23, 12, 0, tzinfo=timezone.utc)
-    assert row[10:15] == (
-        "remotive",
+    assert row[0:5] == ("remotive", "42", "Data Engineer", "Example Co", "Remote")
+    assert row[5:9] == (100000, 120000, "yearly", "USD")
+    assert row[9] == datetime(2026, 10, 20, 10, 30, tzinfo=timezone.utc)
+    assert row[10] == datetime(2026, 10, 23, 12, 0, tzinfo=timezone.utc)
+    assert row[11:15] == (
         "Software",
         "full_time",
         ["Python", "SQL"],
@@ -60,8 +59,8 @@ def test_build_skill_rows_keeps_extracted_skills_separate_and_deduplicated():
     )
 
     assert rows == [
-        (42, "Python", EXTRACTOR_VERSION),
-        (42, "Apache Spark", EXTRACTOR_VERSION),
+        ("remotive", "42", "Python", EXTRACTOR_VERSION),
+        ("remotive", "42", "Apache Spark", EXTRACTOR_VERSION),
     ]
 
 
@@ -103,7 +102,7 @@ def test_upsert_jobs_uses_fake_connection(monkeypatch):
     assert connection.commits == 1
     assert captured["rows"] == rows
     assert "INSERT INTO jobs" in captured["query"]
-    assert "ON CONFLICT (id) DO UPDATE" in captured["query"]
+    assert "ON CONFLICT (source, source_id) DO UPDATE" in captured["query"]
 
 
 def test_upsert_jobs_replaces_extracted_skill_rows_idempotently(monkeypatch):
@@ -145,7 +144,7 @@ def test_upsert_jobs_replaces_extracted_skill_rows_idempotently(monkeypatch):
     deletes = [
         operation
         for operation in operations
-        if operation[0] == "execute"
+        if operation[0] == "values"
         and "DELETE FROM extracted_job_skills" in operation[1]
     ]
     skill_inserts = [
@@ -154,16 +153,60 @@ def test_upsert_jobs_replaces_extracted_skill_rows_idempotently(monkeypatch):
         if operation[0] == "values"
         and "INSERT INTO extracted_job_skills" in operation[1]
     ]
-    assert [operation[2] for operation in deletes] == [([42],), ([42],)]
+    assert [operation[2] for operation in deletes] == [
+        [("remotive", "42")],
+        [("remotive", "42")],
+    ]
     assert [operation[2] for operation in skill_inserts] == [skill_rows, skill_rows]
     assert all(
-        "ON CONFLICT (job_id, skill_name) DO UPDATE" in operation[1]
+        "ON CONFLICT (source, source_id, skill_name) DO UPDATE" in operation[1]
         for operation in skill_inserts
     )
     for start in (0, 3):
         assert operations[start][0] == "values"
-        assert operations[start + 1][0] == "execute"
+        assert operations[start + 1][0] == "values"
         assert operations[start + 2][0] == "values"
+
+
+def test_same_id_from_different_sources_survives_upsert(monkeypatch):
+    jobs = [
+        valid_job(),
+        {
+            **valid_job(),
+            "source": "greenhouse",
+            "source_id": "42",
+            "title": "Different Source Engineer",
+        },
+    ]
+    rows, skipped = load_jobs.build_rows(jobs)
+    stored_rows = {}
+
+    class FakeCursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc_value, traceback):
+            return False
+
+    class FakeConnection:
+        def cursor(self):
+            return FakeCursor()
+
+        def commit(self):
+            pass
+
+    def fake_execute_values(cursor, query, values):
+        if "INSERT INTO jobs" in query:
+            for row in values:
+                stored_rows[(row[0], row[1])] = row
+
+    monkeypatch.setattr(load_jobs, "execute_values", fake_execute_values)
+
+    result = load_jobs.upsert_jobs(rows, FakeConnection())
+
+    assert skipped == 0
+    assert result == {"upserted": 2}
+    assert set(stored_rows) == {("remotive", "42"), ("greenhouse", "42")}
 
 
 def test_parse_timestamp_returns_none_for_invalid_input():

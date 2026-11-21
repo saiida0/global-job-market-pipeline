@@ -91,8 +91,21 @@ def load_processed_jobs(file_path: Path) -> list:
     raise ValueError(f"Unsupported processed jobs format in {file_path}")
 
 
+def _job_key(job: dict) -> tuple[str, str] | None:
+    source = str(job.get("source") or "remotive").strip()
+    source_id = job.get("source_id")
+    if source_id is None:
+        source_id = job.get("id")
+    if source_id is None:
+        return None
+    source_id = str(source_id).strip()
+    if not source or not source_id:
+        return None
+    return source, source_id
+
+
 def _has_required_fields(job: dict) -> bool:
-    return bool(job.get("id") and job.get("title") and job.get("company"))
+    return bool(_job_key(job) and job.get("title") and job.get("company"))
 
 
 def build_rows(jobs: list) -> tuple[list, int]:
@@ -108,9 +121,11 @@ def build_rows(jobs: list) -> tuple[list, int]:
             continue
 
         fetched_at = parse_timestamp(job.get("fetched_at"), "fetched_at") or get_utc_now()
+        source, source_id = _job_key(job)
         rows.append(
             (
-                job.get("id"),
+                source,
+                source_id,
                 job.get("title"),
                 job.get("company"),
                 job.get("location"),
@@ -120,7 +135,6 @@ def build_rows(jobs: list) -> tuple[list, int]:
                 job.get("currency"),
                 parse_timestamp(job.get("publication_date"), "publication_date"),
                 fetched_at,
-                "remotive",
                 job.get("category"),
                 job.get("job_type"),
                 job.get("tags") or [],
@@ -148,11 +162,12 @@ def build_skill_rows(jobs: list) -> list[tuple]:
             if not isinstance(skill, str) or not skill.strip():
                 continue
             skill_name = skill.strip()
-            key = (job["id"], skill_name.casefold())
+            source, source_id = _job_key(job)
+            key = (source, source_id, skill_name.casefold())
             if key in seen:
                 continue
             seen.add(key)
-            rows.append((job["id"], skill_name, EXTRACTOR_VERSION))
+            rows.append((source, source_id, skill_name, EXTRACTOR_VERSION))
     return rows
 
 
@@ -170,7 +185,8 @@ def upsert_jobs(
 
     query = """
         INSERT INTO jobs (
-            id,
+            source,
+            source_id,
             title,
             company_name,
             candidate_required_location,
@@ -180,13 +196,12 @@ def upsert_jobs(
             currency,
             publication_date,
             fetched_at,
-            source,
             category,
             job_type,
             tags,
             url
         ) VALUES %s
-        ON CONFLICT (id) DO UPDATE SET
+        ON CONFLICT (source, source_id) DO UPDATE SET
             title                        = EXCLUDED.title,
             company_name                 = EXCLUDED.company_name,
             candidate_required_location  = EXCLUDED.candidate_required_location,
@@ -196,7 +211,6 @@ def upsert_jobs(
             currency                     = EXCLUDED.currency,
             publication_date             = EXCLUDED.publication_date,
             fetched_at                   = EXCLUDED.fetched_at,
-            source                       = EXCLUDED.source,
             category                     = EXCLUDED.category,
             job_type                     = EXCLUDED.job_type,
             tags                         = EXCLUDED.tags,
@@ -207,21 +221,28 @@ def upsert_jobs(
     with connection.cursor() as cursor:
         execute_values(cursor, query, rows)
         if skill_rows is not None:
-            job_ids = list(dict.fromkeys(row[0] for row in rows))
-            cursor.execute(
-                "DELETE FROM extracted_job_skills WHERE job_id = ANY(%s)",
-                (job_ids,),
+            job_keys = list(dict.fromkeys((row[0], row[1]) for row in rows))
+            execute_values(
+                cursor,
+                """
+                DELETE FROM extracted_job_skills AS skills
+                USING (VALUES %s) AS job_keys(source, source_id)
+                WHERE skills.source = job_keys.source
+                  AND skills.source_id = job_keys.source_id
+                """,
+                job_keys,
             )
             if skill_rows:
                 execute_values(
                     cursor,
                     """
                     INSERT INTO extracted_job_skills (
-                        job_id,
+                        source,
+                        source_id,
                         skill_name,
                         extractor_version
                     ) VALUES %s
-                    ON CONFLICT (job_id, skill_name) DO UPDATE SET
+                    ON CONFLICT (source, source_id, skill_name) DO UPDATE SET
                         extractor_version = EXCLUDED.extractor_version
                     """,
                     skill_rows,

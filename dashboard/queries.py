@@ -9,7 +9,8 @@ import psycopg2
 
 
 JOB_COLUMNS = (
-    "id",
+    "source",
+    "source_id",
     "title",
     "company_name",
     "candidate_required_location",
@@ -53,7 +54,8 @@ def fetch_jobs() -> pd.DataFrame:
                 cursor.execute(
                     """
                     SELECT
-                        id,
+                        source,
+                        source_id,
                         title,
                         company_name,
                         candidate_required_location,
@@ -70,7 +72,7 @@ def fetch_jobs() -> pd.DataFrame:
                         updated_at
                     FROM jobs
                     WHERE source = %s
-                    ORDER BY publication_date DESC NULLS LAST, id
+                    ORDER BY publication_date DESC NULLS LAST, source_id
                     """,
                     ("remotive",),
                 )

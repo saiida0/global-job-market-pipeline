@@ -1,7 +1,8 @@
 BEGIN;
 
 CREATE TABLE IF NOT EXISTS jobs (
-    id                          BIGINT PRIMARY KEY,
+    source                      VARCHAR(100) NOT NULL,
+    source_id                   TEXT NOT NULL,
     title                       TEXT NOT NULL,
     company_name                TEXT NOT NULL,
     candidate_required_location TEXT,
@@ -11,20 +12,23 @@ CREATE TABLE IF NOT EXISTS jobs (
     currency                    VARCHAR(10),
     publication_date            TIMESTAMPTZ,
     fetched_at                  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    source                      VARCHAR(100) NOT NULL,
     category                    VARCHAR(100),
     job_type                    VARCHAR(50),
     tags                        TEXT[],
     url                         TEXT,
     created_at                  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at                  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    updated_at                  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (source, source_id)
 );
 
 CREATE TABLE IF NOT EXISTS extracted_job_skills (
-    job_id            BIGINT NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+    source            VARCHAR(100) NOT NULL,
+    source_id         TEXT NOT NULL,
     skill_name        TEXT NOT NULL,
     extractor_version TEXT NOT NULL,
-    PRIMARY KEY (job_id, skill_name)
+    PRIMARY KEY (source, source_id, skill_name),
+    FOREIGN KEY (source, source_id)
+        REFERENCES jobs(source, source_id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS pipeline_runs (

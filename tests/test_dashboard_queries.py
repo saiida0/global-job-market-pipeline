@@ -9,7 +9,8 @@ def sample_jobs():
     return pd.DataFrame(
         [
             {
-                "id": 1,
+                "source": "remotive",
+                "source_id": "1",
                 "title": "Data Engineer",
                 "company_name": "Northwind",
                 "candidate_required_location": "Remote",
@@ -25,7 +26,8 @@ def sample_jobs():
                 "url": "https://remotive.com/remote-jobs/data-engineer-1",
             },
             {
-                "id": 2,
+                "source": "remotive",
+                "source_id": "2",
                 "title": "Analyst",
                 "company_name": "Contoso",
                 "candidate_required_location": "Europe",
@@ -41,7 +43,8 @@ def sample_jobs():
                 "url": "https://remotive.com/remote-jobs/analyst-2",
             },
             {
-                "id": 3,
+                "source": "remotive",
+                "source_id": "3",
                 "title": "Designer",
                 "company_name": "Fabrikam",
                 "candidate_required_location": "Remote",
@@ -57,7 +60,8 @@ def sample_jobs():
                 "url": "https://remotive.com/remote-jobs/designer-3",
             },
             {
-                "id": 4,
+                "source": "remotive",
+                "source_id": "4",
                 "title": "Researcher",
                 "company_name": "Adventure Works",
                 "candidate_required_location": None,
@@ -88,7 +92,7 @@ def test_filter_options_and_jobs_support_case_insensitive_values(sample_jobs):
         job_type="FULL_TIME",
         location="remote",
     )
-    assert filtered["id"].tolist() == [1]
+    assert filtered["source_id"].tolist() == ["1"]
     assert len(sample_jobs) == 4
 
 

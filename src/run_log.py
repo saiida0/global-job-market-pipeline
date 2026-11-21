@@ -32,7 +32,9 @@ DAILY_TOTALS_SQL = """
 """
 
 DAILY_SKILLS_SQL = """
-    SELECT BTRIM(tag.skill) AS skill, COUNT(DISTINCT jobs.id) AS jobs
+    SELECT
+        BTRIM(tag.skill) AS skill,
+        COUNT(DISTINCT (jobs.source, jobs.source_id)) AS jobs
     FROM jobs
     CROSS JOIN LATERAL UNNEST(
         COALESCE(jobs.tags, ARRAY[]::TEXT[])

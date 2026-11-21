@@ -55,6 +55,26 @@ Apply schema.sql to create these PostgreSQL tables:
 - daily_stats
 - daily_skill_counts
 
+## Composite Job Keys
+
+Jobs are keyed by `(source, source_id)`. The loader defaults missing sources to
+`remotive` and converts the existing Remotive numeric `id` to text for
+`source_id`, preserving its current identity. Extracted skills use the same
+composite job key and cascade deletes through a matching foreign key. Daily
+tag snapshots count distinct `(source, source_id)` pairs. The dashboard still
+shows Remotive listings and keeps its existing layout.
+
+For a fresh database, apply schema.sql. For an existing database, run
+`migrations/001_composite_job_key.sql` once in pgAdmin before using the updated
+loader or dashboard.
+
+## Remaining TODOs
+
+- Add provider-specific fetch and cleaning steps before ingesting sources other
+  than Remotive. The loader accepts `source` and `source_id` fields for those
+  records, but the current fetch and cleaning pipeline is Remotive-only.
+- Add integration coverage for each future provider using local fake data.
+
 ## Data Attribution
 
 Job data from the Remotive API (https://remotive.com). Each listing links to
