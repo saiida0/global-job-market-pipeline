@@ -69,9 +69,17 @@ Extracted matches are stored in extracted_job_skills, one row per job and
 skill, with the extractor version. Reprocessing replaces a job's previous
 extracted skill rows instead of accumulating duplicates.
 
-The dictionary only matches configured terms and aliases. It can miss skills
-outside the list and can produce false positives for ambiguous terms; it does
-not infer context or related skills.
+Extractor version 1.1.0 adds context checks for names with common non-skill
+meanings. Excel matches only spreadsheet-related context; Java, React, Bash,
+Git, pandas, Apache Spark, Azure, and the short JavaScript alias `JS` require
+nearby technical wording. This filters obvious verb and everyday-language uses,
+but can miss valid skills when a listing omits those cues. Other configured
+skills continue to use case-insensitive word-boundary matching.
+
+`analysis/skill_context_check.py` audits the newest local Jobicy snapshot and
+writes only titles and up to 60 characters around each baseline Excel mention
+to `analysis/excel_context_sample.txt`. In that snapshot, the previous matcher
+matched 28 jobs and the context-aware matcher matched 10.
 
 Apply schema.sql to create these PostgreSQL tables:
 

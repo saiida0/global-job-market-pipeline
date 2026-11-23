@@ -122,7 +122,7 @@ def test_cleaned_job_valid_creation():
 def test_clean_job_extracts_skills_without_storing_description_or_changing_tags():
     raw_job = {
         "id": 12345,
-        "title": "Excel and Python Engineer",
+        "title": "Microsoft Excel and Python Engineer",
         "company_name": "TechCorp",
         "description": "<p>Build services with AWS and JavaScript.</p>",
         "tags": ["Python", "Custom Tag"],
