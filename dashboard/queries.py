@@ -47,9 +47,16 @@ FILTER_COLUMNS = {
     "job_type": "job_type",
     "location": "candidate_required_location",
 }
+ROLE_FOCUS_OPTIONS = ("All roles", "Tech and data roles")
+TECH_DATA_CATEGORIES = frozenset(
+    {"Software Development", "Data and Analytics", "AI and Machine Learning"}
+)
+MIN_SALARY_JOBS_PER_CATEGORY = 3
 
-EMPTY_SALARIES = pd.DataFrame(columns=["category", "median_salary_usd"])
-EMPTY_POSTINGS = pd.DataFrame(columns=["publication_day", "job_count"])
+EMPTY_SALARIES = pd.DataFrame(
+    columns=["category", "category_label", "median_salary_usd", "salary_job_count"],
+)
+EMPTY_POSTINGS = pd.DataFrame(columns=["publication_day", "source", "job_count"])
 EMPTY_PIPELINE_RUNS = pd.DataFrame(
     columns=[
         "Started at",
@@ -252,6 +259,15 @@ def filter_jobs(
     return frame.copy()
 
 
+def filter_role_focus(jobs: pd.DataFrame, role_focus: str) -> pd.DataFrame:
+    """Keep all jobs or limit results to software, data, and AI categories."""
+    frame = prepare_jobs(jobs)
+    if role_focus == "All roles":
+        return frame.copy()
+    if role_focus == "Tech and data roles":
+        return frame.loc[frame["category"].isin(TECH_DATA_CATEGORIES)].copy()
+    raise ValueError(f"Unsupported role focus: {role_focus}")
+
 def search_jobs(jobs: pd.DataFrame, query: str | None) -> pd.DataFrame:
     """Match a title or company substring without regard to letter case."""
     frame = prepare_jobs(jobs)
@@ -368,7 +384,7 @@ def jobs_by_category(jobs: pd.DataFrame) -> pd.DataFrame:
 
 
 def salary_by_category(jobs: pd.DataFrame) -> pd.DataFrame:
-    """Return median salary midpoints for yearly USD listings only."""
+    """Return median yearly USD salaries, hiding categories with small samples."""
     frame = prepare_jobs(jobs)
     salary_type = _text_values(frame["salary_type"]).str.casefold()
     currency = _text_values(frame["currency"]).str.upper()
@@ -380,35 +396,54 @@ def salary_by_category(jobs: pd.DataFrame) -> pd.DataFrame:
         [minimum, maximum], axis=1
     ).mean(axis=1)
     eligible = eligible.loc[eligible["salary_estimate_usd"].notna()]
-    jobs_used = len(eligible)
     if eligible.empty:
         result = EMPTY_SALARIES.copy()
-        result.attrs["jobs_used"] = 0
+        result.attrs.update(
+            jobs_used=0, eligible_jobs=0, hidden_categories=0
+        )
         return result
 
-    result = (
-        eligible.groupby("category", as_index=False)["salary_estimate_usd"]
-        .median()
-        .rename(columns={"salary_estimate_usd": "median_salary_usd"})
+    grouped = (
+        eligible.groupby("category", as_index=False)
+        .agg(
+            median_salary_usd=("salary_estimate_usd", "median"),
+            salary_job_count=("salary_estimate_usd", "size"),
+        )
     )
-    result = result.sort_values(
-        "median_salary_usd", ascending=False, ignore_index=True
+    hidden = grouped["salary_job_count"] < MIN_SALARY_JOBS_PER_CATEGORY
+    result = grouped.loc[~hidden].copy()
+    result["category_label"] = result.apply(
+        lambda row: f"{row['category']} (n={row['salary_job_count']})", axis=1
     )
-    result.attrs["jobs_used"] = jobs_used
+    result = result[
+        ["category", "category_label", "median_salary_usd", "salary_job_count"]
+    ].sort_values("median_salary_usd", ascending=False, ignore_index=True)
+    result.attrs.update(
+        jobs_used=int(result["salary_job_count"].sum()),
+        eligible_jobs=len(eligible),
+        hidden_categories=int(hidden.sum()),
+    )
     return result
 
-
 def postings_per_day(jobs: pd.DataFrame) -> pd.DataFrame:
-    """Count listings by their publication date."""
+    """Count postings by continuous UTC date and source."""
     frame = prepare_jobs(jobs)
     dates = pd.to_datetime(frame["publication_date"], errors="coerce", utc=True)
     valid = dates.notna()
     if not valid.any():
         return EMPTY_POSTINGS.copy()
 
-    result = dates.loc[valid].dt.date.value_counts().sort_index()
-    return result.rename_axis("publication_day").reset_index(name="job_count")
-
+    dated = frame.loc[valid, ["source"]].copy()
+    dated["publication_day"] = dates.loc[valid].dt.floor("D")
+    dated["source"] = dated["source"].map(source_display_name).replace("", "Unknown")
+    result = (
+        dated.groupby(["publication_day", "source"], as_index=False)
+        .size()
+        .rename(columns={"size": "job_count"})
+    )
+    return result.sort_values(
+        ["publication_day", "source"], ignore_index=True
+    )
 
 def format_salary_range(row: pd.Series) -> str:
     """Format the raw salary bounds and period for display in the jobs table."""
@@ -451,6 +486,13 @@ def jobs_table(jobs: pd.DataFrame) -> pd.DataFrame:
     ).reset_index(drop=True)
 
 
+def _utc_timestamp_label(value) -> str:
+    timestamp = pd.to_datetime(value, errors="coerce", utc=True)
+    if pd.isna(timestamp):
+        return ""
+    return timestamp.strftime("%Y-%m-%d %H:%M UTC")
+
+
 def pipeline_runs_table(runs: pd.DataFrame | None) -> pd.DataFrame:
     """Format the latest pipeline runs for a compact dashboard history table."""
     frame = runs.copy() if isinstance(runs, pd.DataFrame) else pd.DataFrame(runs or [])
@@ -466,8 +508,8 @@ def pipeline_runs_table(runs: pd.DataFrame | None) -> pd.DataFrame:
     )
     return pd.DataFrame(
         {
-            "Started at": frame["started_at"],
-            "Finished at": frame["finished_at"],
+            "Started at": frame["started_at"].map(_utc_timestamp_label),
+            "Finished at": frame["finished_at"].map(_utc_timestamp_label),
             "Status": frame["status"].fillna(""),
             "Jobs fetched": frame["jobs_fetched"].fillna(0).astype(int),
             "Jobs cleaned": frame["jobs_cleaned"].fillna(0).astype(int),

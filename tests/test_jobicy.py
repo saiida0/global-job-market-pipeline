@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -89,13 +90,16 @@ def test_fetch_paginates_until_next_cursor_is_null(monkeypatch, tmp_path):
     assert saved["jobs"][0]["fetched_at"] == fixed_time.isoformat()
 
 
-def test_fetch_stops_after_five_pages(monkeypatch, tmp_path):
-    configure_output(monkeypatch, tmp_path)
+def test_fetch_stops_at_twenty_page_cap_and_logs_warning(
+    monkeypatch, tmp_path, caplog
+):
+    output_dir, _ = configure_output(monkeypatch, tmp_path)
+    caplog.set_level(logging.INFO, logger=jobicy.__name__)
     responses = [
         fake_response(
             {"jobs": [{"id": page}], "nextCursor": f"cursor-{page + 1}"}
         )
-        for page in range(1, 6)
+        for page in range(1, jobicy.MAX_PAGES + 1)
     ]
     get_mock = Mock(side_effect=responses)
     sleep_mock = Mock()
@@ -104,18 +108,17 @@ def test_fetch_stops_after_five_pages(monkeypatch, tmp_path):
 
     result = jobicy.fetch_jobs()
 
-    assert result["job_count"] == 5
-    assert get_mock.call_count == 5
-    assert [call.kwargs["params"]["count"] for call in get_mock.call_args_list] == [
-        100,
-        100,
-        100,
-        100,
-        100,
-    ]
-    assert sleep_mock.call_count == 4
+    assert result["job_count"] == 20
+    assert get_mock.call_count == 20
+    assert sleep_mock.call_count == 19
     assert all(call.args == (1.5,) for call in sleep_mock.call_args_list)
+    assert "Fetched 20 Jobicy pages." in caplog.text
+    assert "page cap of 20 reached" in caplog.text
 
+    saved = json.loads(Path(result["file_path"]).read_text(encoding="utf-8"))
+    assert saved["_metadata"]["page_count"] == 20
+    assert saved["_metadata"]["job_count"] == 20
+    assert Path(result["file_path"]).parent == output_dir
 
 @pytest.mark.parametrize("status_code", [429, 503])
 def test_fetch_retries_rate_limit_and_unavailable_responses(
@@ -161,6 +164,26 @@ def test_clean_job_maps_jobicy_fields_and_salary_period():
     assert data["currency"] == "EUR"
     assert "Python" in data["extracted_skills"]
     assert "jobDescription" not in data
+
+
+def test_clean_job_decodes_html_entities_in_display_fields():
+    cleaned = jobicy.clean_job(
+        raw_job(
+            jobTitle="Python &#038; SQL Engineer",
+            companyName="Zone &#038; Co",
+            jobIndustry=["Data &#038; Analytics"],
+            jobType=["Full&#45;time"],
+            jobGeo="Europe &#038; Remote",
+        )
+    )
+
+    assert cleaned is not None
+    data = cleaned.to_dict()
+    assert data["title"] == "Python & SQL Engineer"
+    assert data["company"] == "Zone & Co"
+    assert data["category"] == "Data & Analytics"
+    assert data["job_type"] == "Full-time"
+    assert data["location"] == "Europe & Remote"
 
 
 def test_clean_job_without_salary_keeps_salary_null():

@@ -9,14 +9,17 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+import altair as alt
 import streamlit as st
 
 from dashboard.queries import (
+    ROLE_FOCUS_OPTIONS,
     fetch_extracted_job_skills,
     fetch_jobs,
     fetch_pipeline_runs,
     filter_jobs,
     filter_options,
+    filter_role_focus,
     jobs_by_category,
     jobs_table,
     pipeline_runs_table,
@@ -65,6 +68,7 @@ except Exception:
 
 with st.sidebar:
     st.header("Filters")
+    role_focus_choice = st.radio("Role focus", ROLE_FOCUS_OPTIONS)
     source_options = filter_options(all_jobs, "source")
     categories = filter_options(all_jobs, "category")
     job_types = filter_options(all_jobs, "job_type")
@@ -85,6 +89,7 @@ selected_jobs = filter_jobs(
     location=None if location_choice == "All locations" else location_choice,
     sources=selected_sources,
 )
+selected_jobs = filter_role_focus(selected_jobs, role_focus_choice)
 selected_jobs = search_jobs(selected_jobs, search_term)
 
 metrics = summary_metrics(selected_jobs)
@@ -95,7 +100,7 @@ recent_label = (
     else "—"
 )
 
-metric_columns = st.columns(4)
+metric_columns = st.columns([1, 1, 1, 2])
 metric_columns[0].metric("Total jobs", f"{metrics['total_jobs']:,}")
 metric_columns[1].metric("Jobs with salary", f"{metrics['jobs_with_salary']:,}")
 metric_columns[2].metric("Categories", f"{metrics['category_count']:,}")
@@ -115,14 +120,30 @@ with skills_column:
     if skill_data.empty:
         st.info("No tracked skills are available for these jobs.")
     else:
-        st.bar_chart(
-            skill_data,
-            x="skill",
-            y="job_count",
-            horizontal=True,
-            sort="-job_count",
+        skill_chart = (
+            alt.Chart(skill_data)
+            .mark_bar()
+            .encode(
+                x=alt.X(
+                    "job_count:Q",
+                    title="Number of jobs",
+                    scale=alt.Scale(domainMin=0),
+                ),
+                y=alt.Y(
+                    "skill:N",
+                    title="Skill",
+                    sort=alt.SortField(field="job_count", order="descending"),
+                ),
+                tooltip=[
+                    alt.Tooltip("skill:N", title="Skill"),
+                    alt.Tooltip("job_count:Q", title="Number of jobs", format=","),
+                ],
+            )
+        )
+        st.altair_chart(
+            skill_chart,
             width="stretch",
-            alt="Top extracted skills ranked by the number of matching jobs",
+            alt="Top extracted skills sorted by the number of matching jobs",
         )
     tracked_jobs = tracked_skill_job_count(selected_jobs, extracted_skills)
     st.caption(
@@ -136,14 +157,30 @@ with category_column:
     if category_data.empty:
         st.info("No category data is available for these jobs.")
     else:
-        st.bar_chart(
-            category_data,
-            x="category",
-            y="job_count",
-            horizontal=True,
-            sort="-job_count",
+        category_chart = (
+            alt.Chart(category_data)
+            .mark_bar()
+            .encode(
+                x=alt.X(
+                    "job_count:Q",
+                    title="Number of jobs",
+                    scale=alt.Scale(domainMin=0),
+                ),
+                y=alt.Y(
+                    "category:N",
+                    title="Category",
+                    sort=alt.SortField(field="job_count", order="descending"),
+                ),
+                tooltip=[
+                    alt.Tooltip("category:N", title="Category"),
+                    alt.Tooltip("job_count:Q", title="Number of jobs", format=","),
+                ],
+            )
+        )
+        st.altair_chart(
+            category_chart,
             width="stretch",
-            alt="Job counts by shared category",
+            alt="Job counts by shared category, highest count first",
         )
     st.caption(f"Based on {len(selected_jobs):,} jobs")
 
@@ -152,20 +189,48 @@ with salary_column:
     st.subheader("Salary by category")
     salary_data = salary_by_category(selected_jobs)
     if salary_data.empty:
-        st.info("No yearly USD salary data is available for these jobs.")
+        if salary_data.attrs.get("eligible_jobs", 0):
+            st.info("No category has at least 3 yearly USD salary jobs.")
+        else:
+            st.info("No yearly USD salary data is available for these jobs.")
     else:
-        st.bar_chart(
-            salary_data,
-            x="category",
-            y="median_salary_usd",
-            horizontal=True,
-            sort="-median_salary_usd",
+        salary_chart = (
+            alt.Chart(salary_data)
+            .mark_bar()
+            .encode(
+                x=alt.X(
+                    "median_salary_usd:Q",
+                    title="Median yearly salary (USD)",
+                    scale=alt.Scale(domainMin=0),
+                ),
+                y=alt.Y(
+                    "category_label:N",
+                    title="Category",
+                    sort=alt.SortField(
+                        field="median_salary_usd", order="descending"
+                    ),
+                ),
+                tooltip=[
+                    alt.Tooltip("category_label:N", title="Category"),
+                    alt.Tooltip(
+                        "salary_job_count:Q", title="Salary jobs", format=","
+                    ),
+                    alt.Tooltip(
+                        "median_salary_usd:Q",
+                        title="Median yearly salary (USD)",
+                        format=",.0f",
+                    ),
+                ],
+            )
+        )
+        st.altair_chart(
+            salary_chart,
             width="stretch",
-            alt="Median salary by category for yearly USD listings",
+            alt="Median yearly USD salary by category with salary job counts",
         )
     st.caption(
-        f"Based on {salary_data.attrs.get('jobs_used', 0):,} jobs "
-        "(yearly USD only; hourly and non-USD salaries are excluded)"
+        f"Based on {salary_data.attrs.get('jobs_used', 0):,} yearly USD salary jobs "
+        "in the displayed categories. Categories with fewer than 3 salary jobs are hidden."
     )
 
 with posting_column:
@@ -174,18 +239,21 @@ with posting_column:
     if posting_data.empty:
         st.info("No publication dates are available for these jobs.")
     else:
-        posting_data = posting_data.assign(
-            publication_day=posting_data["publication_day"].astype(str)
-        )
         st.line_chart(
             posting_data,
             x="publication_day",
             y="job_count",
+            color="source",
+            x_label="Date posted",
+            y_label="Number of jobs",
             width="stretch",
-            alt="Number of selected job postings by publication day",
+            alt="Daily job postings by source over a continuous date axis",
         )
     dated_jobs = int(posting_data["job_count"].sum()) if not posting_data.empty else 0
-    st.caption(f"Based on {dated_jobs:,} jobs with a publication date")
+    st.caption(
+        f"Based on {dated_jobs:,} jobs with a publication date. Counts reflect each "
+        "source's fetch window, not total market volume."
+    )
 
 st.subheader("Job listings")
 table_data = jobs_table(selected_jobs)
@@ -211,13 +279,8 @@ if run_table.empty:
     st.info("No pipeline runs are recorded yet.")
 else:
     latest_run = run_table.iloc[0]
-    latest_time = latest_run["Finished at"]
-    latest_time_label = (
-        latest_time.strftime("%Y-%m-%d %H:%M UTC")
-        if latest_time is not None and str(latest_time) != 'NaT'
-        else "—"
-    )
-    run_metrics = st.columns(6)
+    latest_time_label = latest_run["Finished at"] or "—"
+    run_metrics = st.columns([2, 1, 1, 1, 1, 1])
     run_metrics[0].metric("Latest run", latest_time_label)
     run_metrics[1].metric("Status", str(latest_run["Status"]).title())
     run_metrics[2].metric("Jobs fetched", f"{latest_run['Jobs fetched']:,}")

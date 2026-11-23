@@ -137,6 +137,28 @@ def test_clean_job_extracts_skills_without_storing_description_or_changing_tags(
     assert job.to_dict()["extracted_skills"] == job.extracted_skills
 
 
+def test_clean_job_decodes_html_entities_in_display_fields():
+    job = clean_job(
+        {
+            "id": 12348,
+            "title": "Python &#038; SQL Engineer",
+            "company_name": "Zone &#038; Co",
+            "category": "Data &#038; Analytics",
+            "job_type": "Full&#45;time",
+            "candidate_required_location": "Europe &#038; Remote",
+            "description": "Build Python &#038; SQL services.",
+        }
+    )
+
+    assert job is not None
+    data = job.to_dict()
+    assert data["title"] == "Python & SQL Engineer"
+    assert data["company"] == "Zone & Co"
+    assert data["category"] == "Data & Analytics"
+    assert data["job_type"] == "Full-time"
+    assert data["location"] == "Europe & Remote"
+    assert "Python" in data["extracted_skills"]
+
 def test_clean_job_handles_missing_description_and_extracts_from_title():
     job = clean_job(
         {

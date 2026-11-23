@@ -152,6 +152,18 @@ def test_same_source_id_from_two_sources_is_kept_as_two_jobs(sample_jobs):
     assert len(queries.filter_jobs(sample_jobs, sources=["Remotive", "Jobicy"])) == 5
 
 
+def test_role_focus_keeps_only_software_data_and_ai_jobs(sample_jobs):
+    focused = queries.filter_role_focus(sample_jobs, "Tech and data roles")
+
+    assert set(zip(focused["source"], focused["source_id"])) == {
+        ("remotive", "1"),
+        ("jobicy", "1"),
+        ("remotive", "2"),
+    }
+    assert len(queries.filter_role_focus(sample_jobs, "All roles")) == 5
+    with pytest.raises(ValueError, match="Unsupported role focus"):
+        queries.filter_role_focus(sample_jobs, "Other roles")
+
 def test_filter_options_reject_unknown_fields(sample_jobs):
     with pytest.raises(ValueError, match="Unsupported filter field"):
         queries.filter_options(sample_jobs, "company")
@@ -200,31 +212,79 @@ def test_jobs_by_category_counts_shared_categories_including_missing(sample_jobs
     }
 
 
-def test_salary_by_category_includes_only_yearly_usd_and_reports_jobs_used(sample_jobs):
-    salary = queries.salary_by_category(sample_jobs).set_index("category")[
-        "median_salary_usd"
+def test_salary_by_category_labels_counts_and_hides_small_samples():
+    def salary_job(source_id, category, amount, salary_type="yearly", currency="USD"):
+        return {
+            "source": "remotive",
+            "source_id": str(source_id),
+            "category": category,
+            "salary_min": amount,
+            "salary_max": amount,
+            "salary_type": salary_type,
+            "currency": currency,
+        }
+
+    salary_jobs = pd.DataFrame(
+        [
+            salary_job(1, "Software Development", 80_000),
+            salary_job(2, "Software Development", 90_000),
+            salary_job(3, "Software Development", 100_000),
+            salary_job(4, "Design", 50_000),
+            salary_job(5, "Design", 60_000),
+            salary_job(6, "Design", 70_000),
+            salary_job(7, "Data and Analytics", 60_000),
+            salary_job(8, "Data and Analytics", 80_000),
+            salary_job(9, "Other", 40, salary_type="hourly"),
+            salary_job(10, "Other", 70_000, currency="EUR"),
+        ]
+    )
+
+    result = queries.salary_by_category(salary_jobs)
+
+    assert result[["category", "category_label", "median_salary_usd", "salary_job_count"]].to_dict("records") == [
+        {
+            "category": "Software Development",
+            "category_label": "Software Development (n=3)",
+            "median_salary_usd": 90_000.0,
+            "salary_job_count": 3,
+        },
+        {
+            "category": "Design",
+            "category_label": "Design (n=3)",
+            "median_salary_usd": 60_000.0,
+            "salary_job_count": 3,
+        },
     ]
+    assert result.attrs["jobs_used"] == 6
+    assert result.attrs["eligible_jobs"] == 8
+    assert result.attrs["hidden_categories"] == 1
 
-    assert salary.to_dict() == {
-        "Software Development": 90_000.0,
-        "Data and Analytics": 60_000.0,
-    }
-    assert "Design" not in salary.index
-    assert "AI and Machine Learning" not in salary.index
-    assert "Other" not in salary.index
-    assert queries.salary_by_category(sample_jobs).attrs["jobs_used"] == 2
-
-
-def test_postings_per_day_ignores_missing_dates(sample_jobs):
+def test_postings_per_day_uses_continuous_utc_dates_and_splits_sources(sample_jobs):
     postings = queries.postings_per_day(sample_jobs)
 
     assert postings.to_dict("records") == [
-        {"publication_day": pd.Timestamp("2026-11-12").date(), "job_count": 1},
-        {"publication_day": pd.Timestamp("2026-11-13").date(), "job_count": 1},
-        {"publication_day": pd.Timestamp("2026-11-14").date(), "job_count": 1},
-        {"publication_day": pd.Timestamp("2026-11-15").date(), "job_count": 1},
+        {
+            "publication_day": pd.Timestamp("2026-11-12T00:00:00Z"),
+            "source": "Remotive",
+            "job_count": 1,
+        },
+        {
+            "publication_day": pd.Timestamp("2026-11-13T00:00:00Z"),
+            "source": "Jobicy",
+            "job_count": 1,
+        },
+        {
+            "publication_day": pd.Timestamp("2026-11-14T00:00:00Z"),
+            "source": "Remotive",
+            "job_count": 1,
+        },
+        {
+            "publication_day": pd.Timestamp("2026-11-15T00:00:00Z"),
+            "source": "Jobicy",
+            "job_count": 1,
+        },
     ]
-
+    assert pd.api.types.is_datetime64_any_dtype(postings["publication_day"])
 
 def test_jobs_table_has_source_link_and_sorts_newest_first(sample_jobs):
     table = queries.jobs_table(sample_jobs)
@@ -283,6 +343,8 @@ def test_pipeline_runs_table_shows_latest_first_and_handles_empty_table():
     assert table.iloc[0]["Status"] == "failed"
     assert table.iloc[0]["Jobs fetched"] == 10
     assert table.iloc[0]["Jobs upserted"] == 0
+    assert table.iloc[0]["Finished at"] == "2026-11-21 10:02 UTC"
+    assert table.iloc[0]["Started at"] == "2026-11-21 10:00 UTC"
     assert table.iloc[1]["Status"] == "success"
     assert queries.pipeline_runs_table(pd.DataFrame()).empty
 
@@ -301,9 +363,12 @@ def test_empty_inputs_return_empty_shapes_and_zero_metrics():
     assert list(queries.jobs_by_category(empty).columns) == ["category", "job_count"]
     assert queries.salary_by_category(empty).empty
     assert queries.salary_by_category(empty).attrs["jobs_used"] == 0
+    assert queries.salary_by_category(empty).attrs["hidden_categories"] == 0
     assert list(queries.salary_by_category(empty).columns) == [
         "category",
+        "category_label",
         "median_salary_usd",
+        "salary_job_count",
     ]
     assert queries.postings_per_day(empty).empty
     assert queries.jobs_table(empty).empty

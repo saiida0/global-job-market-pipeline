@@ -4,6 +4,7 @@ import json
 import logging
 import re
 from datetime import datetime
+from html import unescape
 from pathlib import Path
 
 from .schemas import CleanedJob, SalaryRange
@@ -143,12 +144,27 @@ def parse_datetime(value, field_name: str) -> datetime | None:
         return None
 
 
+def _unescape_entities(value):
+    return unescape(value) if isinstance(value, str) else value
+
+
 def clean_job(raw_job: dict) -> CleanedJob | None:
     raw_job_id = raw_job.get("id") if isinstance(raw_job, dict) else None
 
     try:
         if not isinstance(raw_job, dict):
             raise ValidationError(f"raw_job must be dict, got {type(raw_job).__name__}")
+
+        raw_job = dict(raw_job)
+        for field in (
+            "title",
+            "company_name",
+            "candidate_required_location",
+            "category",
+            "job_type",
+            "description",
+        ):
+            raw_job[field] = _unescape_entities(raw_job.get(field))
 
         salary = SalaryParser.parse(raw_job.get("salary"))
         job = CleanedJob(

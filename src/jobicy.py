@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 API_URL = "https://jobicy.com/api/jobs"
 SOURCE = "jobicy"
 PAGE_SIZE = 100
-MAX_PAGES = 5
+MAX_PAGES = 20
 PAGE_DELAY_SECONDS = 1.5
 MAX_RETRIES = 3
 RETRY_DELAY = 5
@@ -190,7 +190,7 @@ def _reuse_recent_snapshot(now: datetime) -> dict | None:
 
 
 def fetch_jobs() -> dict:
-    """Fetch up to five Jobicy pages or reuse a recent Jobicy snapshot."""
+    """Fetch up to twenty Jobicy pages or reuse a recent snapshot."""
     reused_result = _reuse_recent_snapshot(get_utc_now())
     if reused_result is not None:
         return reused_result
@@ -198,6 +198,7 @@ def fetch_jobs() -> dict:
     jobs = []
     cursor = None
     page_count = 0
+    cap_reached = False
 
     for page_number in range(1, MAX_PAGES + 1):
         params = {"count": PAGE_SIZE}
@@ -215,10 +216,19 @@ def fetch_jobs() -> dict:
             logger.warning("Skipped %s malformed Jobicy jobs.", malformed_count)
         page_count += 1
 
-        if next_cursor is None or page_number == MAX_PAGES:
+        if next_cursor is None:
+            break
+        if page_number == MAX_PAGES:
+            cap_reached = True
             break
         cursor = next_cursor
         time.sleep(PAGE_DELAY_SECONDS)
+
+    logger.info("Fetched %s Jobicy pages.", page_count)
+    if cap_reached:
+        logger.warning(
+            "Jobicy page cap of %s reached; more pages may remain.", MAX_PAGES
+        )
 
     fetched_at = get_utc_now()
     fetched_at_iso = fetched_at.isoformat()
@@ -256,7 +266,7 @@ def _first_label(value) -> str | None:
         if isinstance(item, dict):
             item = item.get("label") or item.get("name")
         if isinstance(item, str) and item.strip():
-            return item.strip()
+            return unescape(item.strip())
     return None
 
 
@@ -309,6 +319,10 @@ def _strip_html(value) -> str:
     return unescape(re.sub(r"<[^>]*>", " ", value))
 
 
+def _unescape_text(value):
+    return unescape(value) if isinstance(value, str) else value
+
+
 def clean_job(raw_job: dict) -> CleanedJob | None:
     """Convert one raw Jobicy listing to the shared cleaned job structure."""
     raw_job_id = raw_job.get("id") if isinstance(raw_job, dict) else None
@@ -317,8 +331,8 @@ def clean_job(raw_job: dict) -> CleanedJob | None:
             raise ValidationError("raw_job must be a dictionary")
 
         job_id = validate_int(raw_job.get("id"), "id", min_val=1)
-        title = validate_string(raw_job.get("jobTitle"), "jobTitle")
-        company = validate_string(raw_job.get("companyName"), "companyName")
+        title = _unescape_text(validate_string(raw_job.get("jobTitle"), "jobTitle"))
+        company = _unescape_text(validate_string(raw_job.get("companyName"), "companyName"))
         description = _strip_html(raw_job.get("jobDescription"))
 
         return CleanedJob(
@@ -329,7 +343,9 @@ def clean_job(raw_job: dict) -> CleanedJob | None:
             company=company,
             category=_first_label(raw_job.get("jobIndustry")),
             job_type=_first_label(raw_job.get("jobType")),
-            location=validate_string(raw_job.get("jobGeo"), "jobGeo", allow_empty=True),
+            location=_unescape_text(
+                validate_string(raw_job.get("jobGeo"), "jobGeo", allow_empty=True)
+            ),
             salary=_salary_range(raw_job),
             publication_date=parse_datetime(raw_job.get("pubDate"), "pubDate"),
             url=validate_string(raw_job.get("url"), "url", allow_empty=True),

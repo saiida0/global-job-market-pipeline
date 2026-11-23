@@ -7,11 +7,12 @@ loads them into PostgreSQL. Pipeline run history and daily job and skill
 snapshots are stored in PostgreSQL.
 
 Remotive is fetched, cleaned, and loaded as before. Jobicy has a separate
-fetch-and-clean path using its public cursor API. It requests up to five pages
+fetch-and-clean path using its public cursor API. It requests up to twenty pages
 of 100 jobs, pauses 1.5 seconds between pages, retries HTTP 429 and 503 using
 Retry-After, and reuses its own raw snapshot for up to six hours. Jobicy's API
 provides a rolling seven-day window with an approximately three-hour update
-delay. Its cleaned records use an empty tag list and save extracted skills
+delay. Its cleaner decodes HTML entities in listing text. Cleaned records use
+an empty tag list and save extracted skills
 without copying description text into cleaned JSON or PostgreSQL.
 
 The main pipeline attempts both sources even if one source fails. It records
@@ -23,6 +24,12 @@ combined run totals and exits unsuccessfully if either source fails.
 - Reads jobs from all sources in a read-only PostgreSQL transaction and caches
   results for 300 seconds. The app adds the project root to `sys.path` so this
   command works when launched from the project root.
+- The Role focus radio filters all charts and listings to software development,
+  data and analytics, and AI and machine learning roles when selected.
+- Daily posting counts use a continuous UTC date axis and separate source lines.
+  Counts reflect each source's fetch window, not total market volume.
+- Salary category bars show the salary job count in each label and tooltip.
+  Categories with fewer than three yearly USD salary jobs are hidden.
 - Filters by source, shared category, job type, and location. The sidebar search
   matches title or company without regard to case.
 - Maps provider category labels to shared dashboard names in
