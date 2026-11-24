@@ -200,9 +200,19 @@ def test_skills_counts_uses_extracted_rows_and_composite_keys(sample_jobs, extra
     ) == 1
 
 
-def test_jobs_by_category_counts_shared_categories_including_missing(sample_jobs):
-    counts = queries.jobs_by_category(sample_jobs).set_index("category")["job_count"]
+def test_category_chart_label_puts_count_first_for_long_names():
+    assert queries.category_chart_label("Product and Management", 45) == (
+        "n=45 · Product and Management"
+    )
 
+
+def test_jobs_by_category_counts_shared_categories_including_missing(sample_jobs):
+    category_data = queries.jobs_by_category(sample_jobs)
+    counts = category_data.set_index("category")["job_count"]
+
+    assert category_data.set_index("category").loc[
+        "AI and Machine Learning", "category_label"
+    ] == "n=1 · AI and Machine Learning"
     assert counts.to_dict() == {
         "AI and Machine Learning": 1,
         "Data and Analytics": 1,
@@ -244,13 +254,13 @@ def test_salary_by_category_labels_counts_and_hides_small_samples():
     assert result[["category", "category_label", "median_salary_usd", "salary_job_count"]].to_dict("records") == [
         {
             "category": "Software Development",
-            "category_label": "Software Development (n=3)",
+            "category_label": "n=3 · Software Development",
             "median_salary_usd": 90_000.0,
             "salary_job_count": 3,
         },
         {
             "category": "Design",
-            "category_label": "Design (n=3)",
+            "category_label": "n=3 · Design",
             "median_salary_usd": 60_000.0,
             "salary_job_count": 3,
         },
@@ -360,7 +370,7 @@ def test_empty_inputs_return_empty_shapes_and_zero_metrics():
     assert queries.tracked_skill_job_count(empty, pd.DataFrame()) == 0
     assert list(queries.skills_counts(empty).columns) == ["skill", "job_count"]
     assert queries.jobs_by_category(empty).empty
-    assert list(queries.jobs_by_category(empty).columns) == ["category", "job_count"]
+    assert list(queries.jobs_by_category(empty).columns) == ["category", "category_label", "job_count"]
     assert queries.salary_by_category(empty).empty
     assert queries.salary_by_category(empty).attrs["jobs_used"] == 0
     assert queries.salary_by_category(empty).attrs["hidden_categories"] == 0

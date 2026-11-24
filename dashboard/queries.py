@@ -374,13 +374,23 @@ def tracked_skill_job_count(
     return len({job_key for job_key, _, _ in _skill_rows_for_jobs(jobs, extracted_skills)})
 
 
+def category_chart_label(category: str, count: int) -> str:
+    """Put each category's sample count first so it remains easy to see."""
+    return f"n={count:,} · {category}"
+
+
 def jobs_by_category(jobs: pd.DataFrame) -> pd.DataFrame:
     """Count listings by their shared category label."""
     categories = prepare_jobs(jobs)["category"]
     result = categories.value_counts().rename_axis("category").reset_index(name="job_count")
-    return result.sort_values(
+    result = result.sort_values(
         ["job_count", "category"], ascending=[False, True], ignore_index=True
     )
+    result["category_label"] = [
+        category_chart_label(category, count)
+        for category, count in zip(result["category"], result["job_count"])
+    ]
+    return result[["category", "category_label", "job_count"]]
 
 
 def salary_by_category(jobs: pd.DataFrame) -> pd.DataFrame:
@@ -412,9 +422,10 @@ def salary_by_category(jobs: pd.DataFrame) -> pd.DataFrame:
     )
     hidden = grouped["salary_job_count"] < MIN_SALARY_JOBS_PER_CATEGORY
     result = grouped.loc[~hidden].copy()
-    result["category_label"] = result.apply(
-        lambda row: f"{row['category']} (n={row['salary_job_count']})", axis=1
-    )
+    result["category_label"] = [
+        category_chart_label(category, count)
+        for category, count in zip(result["category"], result["salary_job_count"])
+    ]
     result = result[
         ["category", "category_label", "median_salary_usd", "salary_job_count"]
     ].sort_values("median_salary_usd", ascending=False, ignore_index=True)

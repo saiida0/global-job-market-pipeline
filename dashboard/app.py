@@ -167,8 +167,9 @@ with category_column:
                     scale=alt.Scale(domainMin=0),
                 ),
                 y=alt.Y(
-                    "category:N",
+                    "category_label:N",
                     title="Category",
+                    axis=alt.Axis(labelLimit=360),
                     sort=alt.SortField(field="job_count", order="descending"),
                 ),
                 tooltip=[
@@ -206,6 +207,7 @@ with salary_column:
                 y=alt.Y(
                     "category_label:N",
                     title="Category",
+                    axis=alt.Axis(labelLimit=360),
                     sort=alt.SortField(
                         field="median_salary_usd", order="descending"
                     ),

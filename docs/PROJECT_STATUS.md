@@ -28,8 +28,10 @@ combined run totals and exits unsuccessfully if either source fails.
   data and analytics, and AI and machine learning roles when selected.
 - Daily posting counts use a continuous UTC date axis and separate source lines.
   Counts reflect each source's fetch window, not total market volume.
-- Salary category bars show the salary job count in each label and tooltip.
-  Categories with fewer than three yearly USD salary jobs are hidden.
+- Category chart labels put sample counts first (for example, `n=45 · Sales`)
+  and use expanded y-axis label limits so full category names remain visible.
+  Salary category bars also show the salary job count in each tooltip. Categories
+  with fewer than three yearly USD salary jobs are hidden.
 - Filters by source, shared category, job type, and location. The sidebar search
   matches title or company without regard to case.
 - Maps provider category labels to shared dashboard names in
