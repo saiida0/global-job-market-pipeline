@@ -26,12 +26,15 @@ combined run totals and exits unsuccessfully if either source fails.
   command works when launched from the project root.
 - The Role focus radio filters all charts and listings to software development,
   data and analytics, and AI and machine learning roles when selected.
-- Daily posting counts use a continuous UTC date axis and separate source lines.
-  Counts reflect each source's fetch window, not total market volume.
+- Daily posting counts use a continuous UTC date axis and one compact panel per
+  source with independent y-scales. Counts reflect each source's fetch window,
+  not total market volume.
 - Category chart labels put sample counts first (for example, `n=45 · Sales`)
   and use expanded y-axis label limits so full category names remain visible.
-  Salary category bars also show the salary job count in each tooltip. Categories
-  with fewer than three yearly USD salary jobs are hidden.
+  Salary category bars also show the salary job count in each tooltip, extend the
+  x-axis past the longest bar, and use yearly USD only. A job's salary value is
+  the midpoint of min and max, or its available bound when only one is listed.
+  Categories with fewer than ten salary jobs are hidden.
 - Filters by source, shared category, job type, and location. The sidebar search
   matches title or company without regard to case.
 - Maps provider category labels to shared dashboard names in
@@ -39,11 +42,12 @@ combined run totals and exits unsuccessfully if either source fails.
 - Shows job and salary metrics, extracted skills from `extracted_job_skills`,
   horizontal category and yearly USD salary charts, publication dates, and
   newest-first links to original postings. Listings show their source.
-- The skills chart counts distinct jobs with each extracted skill and reports
-  coverage against the selected jobs. The salary chart uses yearly USD only and
-  reports how many jobs contributed estimates.
-- The Pipeline status section shows the latest run and its counts, plus the
-  last five runs. It has an empty state for a database without run history.
+- The skills chart counts distinct jobs with each extracted skill, keeps longer
+  labels such as Google Cloud Platform visible, and reports coverage against the
+  selected jobs. Salary captions report how many jobs contributed estimates.
+- The Pipeline status section shows the latest run in a compact UTC format and
+  keeps full timestamps in the last-five-runs table. It has an empty state for a
+  database without run history.
 - Query and shaping helpers live in `dashboard/queries.py`, with fake-data,
   pandas-only tests in `tests/test_dashboard_queries.py`.
 
@@ -117,6 +121,13 @@ loader or dashboard.
 Job data from [Remotive](https://remotive.com) and [Jobicy](https://jobicy.com).
 Each listing links to its original posting. Private, non-commercial academic
 project.
+
+## Scheduling
+
+`scripts/run_pipeline.bat` is the Windows Task Scheduler entry point. It changes
+into the project root, activates `.venv`, runs `python -m src.main`, appends
+standard output and errors to `logs/scheduled_run.log` with start and end
+timestamps, and returns the pipeline exit code.
 
 ## Local Commands
 

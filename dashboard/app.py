@@ -13,7 +13,9 @@ import altair as alt
 import streamlit as st
 
 from dashboard.queries import (
+    MIN_SALARY_JOBS_PER_CATEGORY,
     ROLE_FOCUS_OPTIONS,
+    compact_utc_timestamp,
     fetch_extracted_job_skills,
     fetch_jobs,
     fetch_pipeline_runs,
@@ -132,6 +134,7 @@ with skills_column:
                 y=alt.Y(
                     "skill:N",
                     title="Skill",
+                    axis=alt.Axis(labelLimit=240),
                     sort=alt.SortField(field="job_count", order="descending"),
                 ),
                 tooltip=[
@@ -191,10 +194,13 @@ with salary_column:
     salary_data = salary_by_category(selected_jobs)
     if salary_data.empty:
         if salary_data.attrs.get("eligible_jobs", 0):
-            st.info("No category has at least 3 yearly USD salary jobs.")
+            st.info(f"No category has at least {MIN_SALARY_JOBS_PER_CATEGORY} yearly USD salary jobs.")
         else:
             st.info("No yearly USD salary data is available for these jobs.")
     else:
+        salary_axis_max = max(
+            1.0, float(salary_data["median_salary_usd"].max()) * 1.1
+        )
         salary_chart = (
             alt.Chart(salary_data)
             .mark_bar()
@@ -202,7 +208,7 @@ with salary_column:
                 x=alt.X(
                     "median_salary_usd:Q",
                     title="Median yearly salary (USD)",
-                    scale=alt.Scale(domainMin=0),
+                    scale=alt.Scale(domain=[0, salary_axis_max], nice=False),
                 ),
                 y=alt.Y(
                     "category_label:N",
@@ -232,7 +238,9 @@ with salary_column:
         )
     st.caption(
         f"Based on {salary_data.attrs.get('jobs_used', 0):,} yearly USD salary jobs "
-        "in the displayed categories. Categories with fewer than 3 salary jobs are hidden."
+        "in the displayed categories. Each job uses the midpoint of min and max "
+        "when both are listed, or its available bound when only one is listed. "
+        f"Categories with fewer than {MIN_SALARY_JOBS_PER_CATEGORY} salary jobs are hidden."
     )
 
 with posting_column:
@@ -241,15 +249,34 @@ with posting_column:
     if posting_data.empty:
         st.info("No publication dates are available for these jobs.")
     else:
-        st.line_chart(
-            posting_data,
-            x="publication_day",
-            y="job_count",
-            color="source",
-            x_label="Date posted",
-            y_label="Number of jobs",
+        postings_chart = (
+            alt.Chart(posting_data)
+            .mark_line()
+            .encode(
+                x=alt.X("publication_day:T", title="Date posted"),
+                y=alt.Y(
+                    "job_count:Q",
+                    title="Number of jobs",
+                    scale=alt.Scale(zero=True),
+                ),
+                tooltip=[
+                    alt.Tooltip("source:N", title="Source"),
+                    alt.Tooltip(
+                        "publication_day:T",
+                        title="Date posted",
+                        format="%Y-%m-%d",
+                    ),
+                    alt.Tooltip("job_count:Q", title="Number of jobs", format=","),
+                ],
+            )
+            .properties(height=95)
+            .facet(row=alt.Row("source:N", title=None))
+            .resolve_scale(y="independent")
+        )
+        st.altair_chart(
+            postings_chart,
             width="stretch",
-            alt="Daily job postings by source over a continuous date axis",
+            alt="Daily job postings by source in separate panels",
         )
     dated_jobs = int(posting_data["job_count"].sum()) if not posting_data.empty else 0
     st.caption(
@@ -281,7 +308,7 @@ if run_table.empty:
     st.info("No pipeline runs are recorded yet.")
 else:
     latest_run = run_table.iloc[0]
-    latest_time_label = latest_run["Finished at"] or "—"
+    latest_time_label = compact_utc_timestamp(latest_run["Finished at"]) or "—"
     run_metrics = st.columns([2, 1, 1, 1, 1, 1])
     run_metrics[0].metric("Latest run", latest_time_label)
     run_metrics[1].metric("Status", str(latest_run["Status"]).title())

@@ -51,7 +51,7 @@ ROLE_FOCUS_OPTIONS = ("All roles", "Tech and data roles")
 TECH_DATA_CATEGORIES = frozenset(
     {"Software Development", "Data and Analytics", "AI and Machine Learning"}
 )
-MIN_SALARY_JOBS_PER_CATEGORY = 3
+MIN_SALARY_JOBS_PER_CATEGORY = 10
 
 EMPTY_SALARIES = pd.DataFrame(
     columns=["category", "category_label", "median_salary_usd", "salary_job_count"],
@@ -502,6 +502,13 @@ def _utc_timestamp_label(value) -> str:
     if pd.isna(timestamp):
         return ""
     return timestamp.strftime("%Y-%m-%d %H:%M UTC")
+
+def compact_utc_timestamp(value) -> str:
+    """Format a valid UTC timestamp compactly for a dashboard metric."""
+    timestamp = pd.to_datetime(value, errors="coerce", utc=True)
+    if pd.isna(timestamp):
+        return ""
+    return timestamp.strftime("%d %b %H:%M UTC")
 
 
 def pipeline_runs_table(runs: pd.DataFrame | None) -> pd.DataFrame:

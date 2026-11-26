@@ -223,29 +223,43 @@ def test_jobs_by_category_counts_shared_categories_including_missing(sample_jobs
 
 
 def test_salary_by_category_labels_counts_and_hides_small_samples():
-    def salary_job(source_id, category, amount, salary_type="yearly", currency="USD"):
+    def salary_job(
+        source_id,
+        category,
+        amount,
+        salary_type="yearly",
+        currency="USD",
+        maximum=None,
+    ):
         return {
             "source": "remotive",
             "source_id": str(source_id),
             "category": category,
             "salary_min": amount,
-            "salary_max": amount,
+            "salary_max": amount if maximum is None else maximum,
             "salary_type": salary_type,
             "currency": currency,
         }
 
+    software_jobs = [
+        salary_job(i + 1, "Software Development", 80_000, maximum=100_000)
+        for i in range(10)
+    ]
+    design_jobs = [
+        salary_job(i + 11, "Design", 50_000, maximum=70_000)
+        for i in range(10)
+    ]
+    small_sample_jobs = [
+        salary_job(i + 21, "Data and Analytics", 60_000, maximum=80_000)
+        for i in range(9)
+    ]
     salary_jobs = pd.DataFrame(
-        [
-            salary_job(1, "Software Development", 80_000),
-            salary_job(2, "Software Development", 90_000),
-            salary_job(3, "Software Development", 100_000),
-            salary_job(4, "Design", 50_000),
-            salary_job(5, "Design", 60_000),
-            salary_job(6, "Design", 70_000),
-            salary_job(7, "Data and Analytics", 60_000),
-            salary_job(8, "Data and Analytics", 80_000),
-            salary_job(9, "Other", 40, salary_type="hourly"),
-            salary_job(10, "Other", 70_000, currency="EUR"),
+        software_jobs
+        + design_jobs
+        + small_sample_jobs
+        + [
+            salary_job(30, "Other", 40, salary_type="hourly"),
+            salary_job(31, "Other", 70_000, currency="EUR"),
         ]
     )
 
@@ -254,19 +268,19 @@ def test_salary_by_category_labels_counts_and_hides_small_samples():
     assert result[["category", "category_label", "median_salary_usd", "salary_job_count"]].to_dict("records") == [
         {
             "category": "Software Development",
-            "category_label": "n=3 · Software Development",
+            "category_label": "n=10 · Software Development",
             "median_salary_usd": 90_000.0,
-            "salary_job_count": 3,
+            "salary_job_count": 10,
         },
         {
             "category": "Design",
-            "category_label": "n=3 · Design",
+            "category_label": "n=10 · Design",
             "median_salary_usd": 60_000.0,
-            "salary_job_count": 3,
+            "salary_job_count": 10,
         },
     ]
-    assert result.attrs["jobs_used"] == 6
-    assert result.attrs["eligible_jobs"] == 8
+    assert result.attrs["jobs_used"] == 20
+    assert result.attrs["eligible_jobs"] == 29
     assert result.attrs["hidden_categories"] == 1
 
 def test_postings_per_day_uses_continuous_utc_dates_and_splits_sources(sample_jobs):
@@ -319,6 +333,13 @@ def test_jobs_table_has_source_link_and_sorts_newest_first(sample_jobs):
     assert table.loc[1, "Salary range"] == "USD 60,000 yearly"
     assert table.loc[3, "Salary range"] == "USD 80,000–100,000 yearly"
     assert table.loc[0, "Original posting"] == "https://jobicy.com/jobs/3"
+
+
+def test_compact_utc_timestamp_formats_metric_and_handles_invalid_values():
+    assert queries.compact_utc_timestamp("2026-11-24T13:20:00Z") == (
+        "24 Nov 13:20 UTC"
+    )
+    assert queries.compact_utc_timestamp("not a timestamp") == ""
 
 
 def test_pipeline_runs_table_shows_latest_first_and_handles_empty_table():
