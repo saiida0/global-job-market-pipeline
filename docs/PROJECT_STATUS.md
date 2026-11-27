@@ -21,6 +21,8 @@ combined run totals and exits unsuccessfully if either source fails.
 ## Dashboard
 
 - Run from the project root with `streamlit run dashboard/app.py`.
+- Uses `st.navigation` for Market Overview and Skill Match. Market Overview
+  retains the existing dashboard content.
 - Reads jobs from all sources in a read-only PostgreSQL transaction and caches
   results for 300 seconds. The app adds the project root to `sys.path` so this
   command works when launched from the project root.
@@ -48,8 +50,15 @@ combined run totals and exits unsuccessfully if either source fails.
 - The Pipeline status section shows the latest run in a compact UTC format and
   keeps full timestamps in the last-five-runs table. It has an empty state for a
   database without run history.
+- Skill Match lists all tracked skills by demand, uses the same role-focus
+  categories as Market Overview, and reports any/all job matches, selected-skill
+  counts, the top ten co-occurring skills with percentages, yearly USD median
+  salary when at least ten salary jobs are available, and up to 20 linked jobs.
+  Its footer reports the number of jobs with tracked skills. Skill Match queries
+  accept a connection and bind skill selections as SQL parameters.
 - Query and shaping helpers live in `dashboard/queries.py`, with fake-data,
-  pandas-only tests in `tests/test_dashboard_queries.py`.
+  pandas-only tests in `tests/test_dashboard_queries.py` and fake-connection
+  query tests in `tests/test_skill_match_queries.py`.
 
 ## Run History and Daily Statistics
 
