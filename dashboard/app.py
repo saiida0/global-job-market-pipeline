@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+DASHBOARD_DIR = Path(__file__).resolve().parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
@@ -16,14 +17,14 @@ st.set_page_config(page_title="Global Job Market Dashboard", layout="wide")
 page = st.navigation(
     [
         st.Page(
-            "dashboard/market_overview.py",
+            str(DASHBOARD_DIR / "market_overview.py"),
             title="Market Overview",
             icon=":material/bar_chart:",
             default=True,
             help="All-source job market metrics, category and salary charts, listings, and pipeline status.",
         ),
         st.Page(
-            "dashboard/skill_match.py",
+            str(DASHBOARD_DIR / "skill_match.py"),
             title="Skill Match",
             icon=":material/search:",
             help="Choose tracked skills to compare job matches, related skills, salary data, and current postings.",

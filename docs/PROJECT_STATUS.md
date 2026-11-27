@@ -23,6 +23,9 @@ combined run totals and exits unsuccessfully if either source fails.
 - Run from the project root with `streamlit run dashboard/app.py`.
 - Uses `st.navigation` for Market Overview and Skill Match. Market Overview
   retains the existing dashboard content.
+- Navigation page paths are absolute paths built from `dashboard/app.py`, so
+  they resolve regardless of the process working directory. A test checks
+  that each configured page file exists.
 - Reads jobs from all sources in a read-only PostgreSQL transaction and caches
   results for 300 seconds. The app adds the project root to `sys.path` so this
   command works when launched from the project root.
