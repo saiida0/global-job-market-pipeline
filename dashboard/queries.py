@@ -616,7 +616,7 @@ def fetch_skill_options(connection) -> pd.DataFrame:
 def fetch_skill_match_summary(
     connection, selected_skills, role_focus: str = ROLE_FOCUS_OPTIONS[0]
 ) -> pd.DataFrame:
-    """Count jobs matching any or all chosen skills and tracked job coverage."""
+    """Count matches, tracked-job coverage, and sources in the any-skill sample."""
     skill_names = _selected_skill_names(selected_skills)
     all_roles, category_aliases = _role_focus_parameters(role_focus)
     return _query_dataframe(
@@ -642,6 +642,10 @@ def fetch_skill_match_summary(
             JOIN jobs AS j
               ON j.source = e.source AND j.source_id = e.source_id
             WHERE %s OR LOWER(TRIM(COALESCE(j.category, ''))) = ANY(%s)
+        ),
+        matched_sources AS (
+            SELECT DISTINCT source
+            FROM selected_job_counts
         )
         SELECT
             (SELECT COUNT(*) FROM tracked_job_keys) AS tracked_jobs,
@@ -650,7 +654,14 @@ def fetch_skill_match_summary(
                 SELECT COUNT(*)
                 FROM selected_job_counts
                 WHERE selected_skill_count = %s
-            ) AS jobs_all
+            ) AS jobs_all,
+            COALESCE(
+                (
+                    SELECT ARRAY_AGG(source::TEXT ORDER BY source::TEXT)
+                    FROM matched_sources
+                ),
+                ARRAY[]::TEXT[]
+            ) AS matched_sources
         """,
         (
             skill_names,

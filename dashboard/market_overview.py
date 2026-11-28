@@ -12,6 +12,12 @@ if str(PROJECT_ROOT) not in sys.path:
 import altair as alt
 import streamlit as st
 
+from dashboard.insights import (
+    cloud_demand_insight,
+    salary_gap_insight,
+    skill_pair_insight,
+    source_difference_insight,
+)
 from dashboard.queries import (
     MIN_SALARY_JOBS_PER_CATEGORY,
     ROLE_FOCUS_OPTIONS,
@@ -28,10 +34,12 @@ from dashboard.queries import (
     postings_per_day,
     salary_by_category,
     search_jobs,
+    skill_display_name,
     skills_counts,
     summary_metrics,
     tracked_skill_job_count,
 )
+from dashboard.theme import CHART_ACCENT_COLOR
 
 
 @st.cache_data(ttl=300, show_spinner="Loading jobs from PostgreSQL...")
@@ -115,6 +123,33 @@ elif selected_jobs.empty:
 
 st.caption(f"Showing {len(selected_jobs):,} of {len(all_jobs):,} jobs.")
 
+insight_keys = [
+    "source",
+    "source_id",
+    "category",
+    "salary_min",
+    "salary_max",
+    "salary_type",
+    "currency",
+]
+insight_job_rows = (
+    selected_jobs[insight_keys]
+    .merge(
+        extracted_skills[["source", "source_id", "skill_name"]],
+        on=["source", "source_id"],
+        how="left",
+    )
+    .groupby(insight_keys, as_index=False, dropna=False, sort=False)
+    .agg(
+        skills=(
+            "skill_name",
+            lambda values: [
+                skill_display_name(value) for value in values.dropna().unique()
+            ],
+        )
+    )
+)
+
 skills_column, category_column = st.columns(2)
 with skills_column:
     st.subheader("Most demanded skills")
@@ -124,7 +159,7 @@ with skills_column:
     else:
         skill_chart = (
             alt.Chart(skill_data)
-            .mark_bar()
+            .mark_bar(color=CHART_ACCENT_COLOR)
             .encode(
                 x=alt.X(
                     "job_count:Q",
@@ -153,6 +188,8 @@ with skills_column:
         f"Based on {tracked_jobs:,} jobs with at least one tracked skill "
         f"(of {len(selected_jobs):,} jobs)"
     )
+    st.caption(cloud_demand_insight(insight_job_rows))
+    st.caption(skill_pair_insight(insight_job_rows))
 
 with category_column:
     st.subheader("Jobs per category")
@@ -162,7 +199,7 @@ with category_column:
     else:
         category_chart = (
             alt.Chart(category_data)
-            .mark_bar()
+            .mark_bar(color=CHART_ACCENT_COLOR)
             .encode(
                 x=alt.X(
                     "job_count:Q",
@@ -187,6 +224,7 @@ with category_column:
             alt="Job counts by shared category, highest count first",
         )
     st.caption(f"Based on {len(selected_jobs):,} jobs")
+    st.caption(source_difference_insight(insight_job_rows))
 
 salary_column, posting_column = st.columns(2)
 with salary_column:
@@ -203,7 +241,7 @@ with salary_column:
         )
         salary_chart = (
             alt.Chart(salary_data)
-            .mark_bar()
+            .mark_bar(color=CHART_ACCENT_COLOR)
             .encode(
                 x=alt.X(
                     "median_salary_usd:Q",
@@ -242,6 +280,7 @@ with salary_column:
         "when both are listed, or its available bound when only one is listed. "
         f"Categories with fewer than {MIN_SALARY_JOBS_PER_CATEGORY} salary jobs are hidden."
     )
+    st.caption(salary_gap_insight(insight_job_rows))
 
 with posting_column:
     st.subheader("Postings per day")
@@ -251,7 +290,7 @@ with posting_column:
     else:
         postings_chart = (
             alt.Chart(posting_data)
-            .mark_line()
+            .mark_line(color=CHART_ACCENT_COLOR)
             .encode(
                 x=alt.X("publication_day:T", title="Date posted"),
                 y=alt.Y(
@@ -329,3 +368,12 @@ st.caption(
     "Job data from [Remotive](https://remotive.com) and [Jobicy](https://jobicy.com). "
     "Each listing links to its original posting. Private, non-commercial academic project."
 )
+
+with st.expander("About this data"):
+    st.write(
+        "Listings come from Remotive and Jobicy. Jobicy provides a rolling 7-day "
+        "window; Remotive provides a small free sample. Extracted skills use a "
+        "tech-focused dictionary against job titles and descriptions, so non-tech "
+        "roles can show few skills. Salary charts include yearly USD data only. "
+        "This project is private and non-commercial."
+    )

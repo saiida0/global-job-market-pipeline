@@ -3,3 +3,9 @@ address = "localhost"
 
 [browser]
 gatherUsageStats = false
+
+[theme]
+base = "dark"
+primaryColor = "#2563EB"
+chartCategoricalColors = ["#2563EB"]
+font = "sans-serif"

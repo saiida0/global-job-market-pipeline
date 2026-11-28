@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import math
+
 import altair as alt
 import pandas as pd
 import streamlit as st
 
+from dashboard.insights import skill_match_insight
 from dashboard.queries import (
     MIN_SALARY_JOBS_PER_CATEGORY,
     ROLE_FOCUS_OPTIONS,
@@ -19,6 +22,7 @@ from dashboard.queries import (
     skill_display_name,
     source_display_name,
 )
+from dashboard.theme import CHART_ACCENT_COLOR
 
 
 @st.cache_data(ttl=300, show_spinner="Loading tracked skills...")
@@ -96,6 +100,11 @@ tracked_jobs = int(summary["tracked_jobs"])
 if selected_skills:
     jobs_any = int(summary["jobs_any"])
     jobs_all = int(summary["jobs_all"])
+    match_percent = 100 * jobs_any / tracked_jobs if tracked_jobs else 0.0
+    st.write(
+        f"Your skills match {jobs_any:,} of {tracked_jobs:,} jobs with tracked "
+        f"skills ({match_percent:.1f}%)."
+    )
 
     metric_columns = st.columns(2)
     metric_columns[0].metric("Jobs matching at least one chosen skill", f"{jobs_any:,}")
@@ -109,13 +118,19 @@ if selected_skills:
     if selected_counts.empty:
         st.info("No chosen skills are available to chart.")
     else:
+        max_job_count = int(
+            pd.to_numeric(selected_counts["job_count"], errors="coerce").max()
+        )
+        tick_step = max(1, math.ceil(max_job_count / 7))
+        tick_values = list(range(0, max_job_count + 1, tick_step))
         selected_skill_chart = (
             alt.Chart(selected_counts)
-            .mark_bar()
+            .mark_bar(color=CHART_ACCENT_COLOR)
             .encode(
                 x=alt.X(
                     "job_count:Q",
                     title="Number of jobs",
+                    axis=alt.Axis(format="d", values=tick_values),
                     scale=alt.Scale(domainMin=0),
                 ),
                 y=alt.Y(
@@ -167,6 +182,16 @@ if selected_skills:
         st.caption(
             f"Shares use {jobs_any:,} jobs matching at least one chosen skill as the sample."
         )
+
+    match_insight_rows = next_skills.copy()
+    if match_insight_rows.empty:
+        match_insight_rows = pd.DataFrame(
+            [{"skill_name": None, "display_name": None, "job_count": 0}]
+        )
+    match_insight_rows["matching_job_count"] = jobs_any
+    match_sources = summary.get("matched_sources", [])
+    match_insight_rows["sources"] = [match_sources] * len(match_insight_rows)
+    st.caption(skill_match_insight(match_insight_rows))
 
     st.subheader("Salary signal")
     salary = results["salary"].iloc[0]

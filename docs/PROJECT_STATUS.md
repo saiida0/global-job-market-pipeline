@@ -29,6 +29,18 @@ combined run totals and exits unsuccessfully if either source fails.
 - Reads jobs from all sources in a read-only PostgreSQL transaction and caches
   results for 300 seconds. The app adds the project root to `sys.path` so this
   command works when launched from the project root.
+- Adds deterministic analyst captions for tracked-skill cloud demand, yearly
+  USD salary medians by Python skill, category mix by source, common tracked
+  skill pairs, and the leading unchosen skill in Skill Match. Captions show
+  their sample sizes and source coverage; samples below ten use a fixed
+  insufficient-data sentence.
+- Market Overview has an “About this data” expander describing the two source
+  windows, the tech-focused skill dictionary, yearly USD salary coverage, and
+  the project's private, non-commercial scope.
+- Skill Match states its any-skill match share of jobs with tracked skills and
+  uses integer x-axis ticks with at most eight tick marks.
+- Uses a dark Streamlit theme, sans-serif font, and the shared blue chart color
+  in both dashboard pages.
 - The Role focus radio filters all charts and listings to software development,
   data and analytics, and AI and machine learning roles when selected.
 - Daily posting counts use a continuous UTC date axis and one compact panel per

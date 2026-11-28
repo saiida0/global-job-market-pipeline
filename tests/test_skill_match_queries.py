@@ -59,8 +59,8 @@ def test_fetch_skill_options_returns_display_names_sorted_by_fake_demand():
 
 def test_fetch_skill_match_summary_uses_parameters_and_role_focus_aliases():
     connection = FakeConnection(
-        ["tracked_jobs", "jobs_any", "jobs_all"],
-        [(12, 6, 2)],
+        ["tracked_jobs", "jobs_any", "jobs_all", "matched_sources"],
+        [(12, 6, 2, ["jobicy", "remotive"])],
     )
 
     result = queries.fetch_skill_match_summary(
@@ -68,7 +68,12 @@ def test_fetch_skill_match_summary_uses_parameters_and_role_focus_aliases():
     )
 
     assert result.to_dict("records") == [
-        {"tracked_jobs": 12, "jobs_any": 6, "jobs_all": 2}
+        {
+            "tracked_jobs": 12,
+            "jobs_any": 6,
+            "jobs_all": 2,
+            "matched_sources": ["jobicy", "remotive"],
+        }
     ]
     assert connection.fake_cursor.parameters[0] == ["Python", "SQL"]
     assert connection.fake_cursor.parameters[1] is False
@@ -165,16 +170,21 @@ def test_fetch_skill_match_jobs_returns_source_and_original_link():
 
 
 def test_empty_skill_selection_and_zero_match_cases_are_shaped():
-    summary_columns = ["tracked_jobs", "jobs_any", "jobs_all"]
-    summary_connection = FakeConnection(summary_columns, [(25, 0, 0)])
+    summary_columns = ["tracked_jobs", "jobs_any", "jobs_all", "matched_sources"]
+    summary_connection = FakeConnection(summary_columns, [(25, 0, 0, [])])
     summary = queries.fetch_skill_match_summary(summary_connection, [])
     assert summary.to_dict("records") == [
-        {"tracked_jobs": 25, "jobs_any": 0, "jobs_all": 0}
+        {
+            "tracked_jobs": 25,
+            "jobs_any": 0,
+            "jobs_all": 0,
+            "matched_sources": [],
+        }
     ]
     assert summary_connection.fake_cursor.parameters[0] == []
 
     no_match_summary = queries.fetch_skill_match_summary(
-        FakeConnection(summary_columns, [(25, 0, 0)]), ["Not a tracked skill"]
+        FakeConnection(summary_columns, [(25, 0, 0, [])]), ["Not a tracked skill"]
     )
     assert no_match_summary.iloc[0]["jobs_any"] == 0
     assert no_match_summary.iloc[0]["jobs_all"] == 0
