@@ -7,5 +7,16 @@ gatherUsageStats = false
 [theme]
 base = "dark"
 primaryColor = "#2563EB"
-chartCategoricalColors = ["#2563EB"]
+backgroundColor = "#141415"
+secondaryBackgroundColor = "#19191b"
+textColor = "#ededed"
+linkColor = "#60A5FA"
+chartCategoricalColors = ["#2563EB", "#66666d"]
 font = "sans-serif"
+
+[theme.sidebar]
+backgroundColor = "#0f0f10"
+secondaryBackgroundColor = "#232325"
+textColor = "#ededed"
+primaryColor = "#2563EB"
+linkColor = "#60A5FA"

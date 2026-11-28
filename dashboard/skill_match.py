@@ -22,7 +22,7 @@ from dashboard.queries import (
     skill_display_name,
     source_display_name,
 )
-from dashboard.theme import CHART_ACCENT_COLOR
+from dashboard.theme import CHART_ACCENT_COLOR, render_chart_heading
 
 
 @st.cache_data(ttl=300, show_spinner="Loading tracked skills...")
@@ -60,7 +60,7 @@ def load_skill_match_results(
 
 
 st.title("Skill Match")
-st.caption("Explore job demand and related skills across Remotive and Jobicy.")
+st.caption("Explore job demand and related skills across Remotive and Jobicy")
 
 try:
     skill_options = load_skill_options()
@@ -113,8 +113,8 @@ if selected_skills:
     if jobs_any == 0:
         st.info("No jobs match these skills and role focus. Try a different selection.")
 
-    st.subheader("Chosen skills by job demand")
     selected_counts = results["selected_skill_counts"]
+    render_chart_heading("Chosen skills by job demand", jobs_any)
     if selected_counts.empty:
         st.info("No chosen skills are available to chart.")
     else:
@@ -150,10 +150,6 @@ if selected_skills:
             width="stretch",
             alt="Chosen skills ranked by the number of jobs that request each skill",
         )
-    st.caption(
-        f"Skill counts are based on {jobs_any:,} jobs matching at least one chosen skill."
-    )
-
     st.subheader("Skills to learn next")
     next_skills = results["skills_to_learn"]
     if jobs_any == 0:
@@ -180,7 +176,7 @@ if selected_skills:
             alt="Ten most common unchosen skills among jobs matching the selected skills",
         )
         st.caption(
-            f"Shares use {jobs_any:,} jobs matching at least one chosen skill as the sample."
+            f"Shares use {jobs_any:,} jobs matching at least one chosen skill as the sample"
         )
 
     match_insight_rows = next_skills.copy()
@@ -204,7 +200,7 @@ if selected_skills:
             f"${float(salary['median_salary_usd']):,.0f}",
         )
         st.caption(
-            f"Based on {salary_job_count:,} matching jobs with yearly USD salary data."
+            f"Based on {salary_job_count:,} matching jobs with yearly USD salary data"
         )
 
     st.subheader("Matching jobs")
@@ -237,7 +233,7 @@ if selected_skills:
         )
         st.caption(
             f"Showing {len(jobs_table):,} of {jobs_any:,} jobs matching at least one chosen skill; "
-            "at most 20 postings are shown."
+            "at most 20 postings are shown"
         )
 else:
     st.info("Choose at least one tracked skill to see matching jobs and related skills.")

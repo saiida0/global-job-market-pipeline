@@ -40,7 +40,7 @@ from dashboard.queries import (
     summary_metrics,
     tracked_skill_job_count,
 )
-from dashboard.theme import CHART_ACCENT_COLOR
+from dashboard.theme import CHART_ACCENT_COLOR, render_chart_heading
 
 
 @st.cache_data(ttl=300, show_spinner="Loading jobs from PostgreSQL...")
@@ -62,8 +62,8 @@ def load_pipeline_runs():
 
 
 
-st.title("Global Job Market Dashboard")
-st.caption("Remote job postings from Remotive and Jobicy")
+st.title("Remote job market")
+st.caption("Remotive and Jobicy postings, collected twice daily")
 
 try:
     all_jobs = load_jobs()
@@ -122,7 +122,7 @@ if all_jobs.empty:
 elif selected_jobs.empty:
     st.info("No jobs match these filters. Adjust the sidebar filters to see results.")
 
-st.caption(f"Showing {len(selected_jobs):,} of {len(all_jobs):,} jobs.")
+st.caption(f"Showing {len(selected_jobs):,} of {len(all_jobs):,} jobs")
 
 insight_keys = [
     "source",
@@ -153,8 +153,9 @@ insight_job_rows = (
 
 skills_column, category_column = st.columns(2)
 with skills_column:
-    st.subheader("Most demanded skills")
     skill_data = skills_counts(selected_jobs, extracted_skills).head(15)
+    tracked_jobs = tracked_skill_job_count(selected_jobs, extracted_skills)
+    render_chart_heading("Most demanded skills", tracked_jobs)
     if skill_data.empty:
         st.info("No tracked skills are available for these jobs.")
     else:
@@ -184,10 +185,8 @@ with skills_column:
             width="stretch",
             alt="Top extracted skills sorted by the number of matching jobs",
         )
-    tracked_jobs = tracked_skill_job_count(selected_jobs, extracted_skills)
     st.caption(
-        f"Based on {tracked_jobs:,} jobs with at least one tracked skill "
-        f"(of {len(selected_jobs):,} jobs)"
+        f"Jobs with at least one tracked skill (of {len(selected_jobs):,} jobs)"
     )
     st.caption(
         add_selected_source(cloud_demand_insight(insight_job_rows), selected_sources)
@@ -197,7 +196,7 @@ with skills_column:
     )
 
 with category_column:
-    st.subheader("Jobs per category")
+    render_chart_heading("Jobs per category", len(selected_jobs))
     category_data = jobs_by_category(selected_jobs)
     if category_data.empty:
         st.info("No category data is available for these jobs.")
@@ -228,12 +227,12 @@ with category_column:
             width="stretch",
             alt="Job counts by shared category, highest count first",
         )
-    st.caption(f"Based on {len(selected_jobs):,} jobs")
 
 salary_column, posting_column = st.columns(2)
 with salary_column:
-    st.subheader("Salary by category")
     salary_data = salary_by_category(selected_jobs)
+    salary_jobs_used = int(salary_data.attrs.get("jobs_used", 0))
+    render_chart_heading("Salary by category", salary_jobs_used)
     if salary_data.empty:
         if salary_data.attrs.get("eligible_jobs", 0):
             st.info(f"No category has at least {MIN_SALARY_JOBS_PER_CATEGORY} yearly USD salary jobs.")
@@ -279,9 +278,8 @@ with salary_column:
             alt="Median yearly USD salary by category with salary job counts",
         )
     st.caption(
-        f"Based on {salary_data.attrs.get('jobs_used', 0):,} yearly USD salary jobs "
-        "in the displayed categories. Each job uses the midpoint of min and max "
-        "when both are listed, or its available bound when only one is listed. "
+        "Each job uses the midpoint of min and max when both are listed, or its "
+        "available bound when only one is listed. "
         f"Categories with fewer than {MIN_SALARY_JOBS_PER_CATEGORY} salary jobs are hidden."
     )
     salary_chart_categories = set(salary_data["category"].astype(str))
@@ -299,8 +297,9 @@ with salary_column:
     )
 
 with posting_column:
-    st.subheader("Postings per day")
     posting_data = postings_per_day(selected_jobs)
+    dated_jobs = int(posting_data["job_count"].sum()) if not posting_data.empty else 0
+    render_chart_heading("Postings per day", dated_jobs)
     if posting_data.empty:
         st.info("No publication dates are available for these jobs.")
     else:
@@ -337,10 +336,8 @@ with posting_column:
             width="stretch",
             alt="Daily job postings by source in separate panels",
         )
-    dated_jobs = int(posting_data["job_count"].sum()) if not posting_data.empty else 0
     st.caption(
-        f"Based on {dated_jobs:,} jobs with a publication date. Counts reflect each "
-        "source's fetch window, not total market volume."
+        "Counts reflect each source's fetch window, not total market volume"
     )
 
 st.subheader("Job listings")

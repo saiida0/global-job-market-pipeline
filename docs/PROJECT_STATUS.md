@@ -21,6 +21,13 @@ combined run totals and exits unsuccessfully if either source fails.
 ## Dashboard
 
 - Run from the project root with `streamlit run dashboard/app.py`.
+- Uses fixed design tokens in `dashboard/theme.py`, a dark sans-serif theme,
+  and one CSS injection from the app entrypoint. The overview title is
+  “Remote job market” with the subtitle “Remotive and Jobicy postings, collected
+  twice daily”.
+- Chart headings show a right-aligned monospace sample tag. Sample counts that
+  were moved into those tags are no longer repeated in captions; captions that
+  describe a method or excluded rows remain.
 - Uses `st.navigation` for Market Overview and Skill Match. Market Overview
   retains the existing dashboard content.
 - Navigation page paths are absolute paths built from `dashboard/app.py`, so

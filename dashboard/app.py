@@ -12,21 +12,22 @@ if str(PROJECT_ROOT) not in sys.path:
 
 import streamlit as st
 
-st.set_page_config(page_title="Global Job Market Dashboard", layout="wide")
+from dashboard.theme import dashboard_css
+
+st.set_page_config(page_title="Remote job market", layout="wide")
+st.markdown(dashboard_css(), unsafe_allow_html=True)
 
 page = st.navigation(
     [
         st.Page(
             str(DASHBOARD_DIR / "market_overview.py"),
             title="Market Overview",
-            icon=":material/bar_chart:",
             default=True,
             help="All-source job market metrics, category and salary charts, listings, and pipeline status.",
         ),
         st.Page(
             str(DASHBOARD_DIR / "skill_match.py"),
             title="Skill Match",
-            icon=":material/search:",
             help="Choose tracked skills to compare job matches, related skills, salary data, and current postings.",
         ),
     ],

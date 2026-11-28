@@ -111,6 +111,10 @@ are excluded.
 Job data from the Remotive API (https://remotive.com). Each listing links to
 its original Remotive posting. Private, non-commercial academic project.
 
+## Credits
+
+Dashboard design rules adapted from unslop by Damir Sokolovsky (CC BY 4.0), github.com/heydamir/unslop
+
 ## Data Policy
 
 This project retains timestamped raw snapshots for each run. Each run
