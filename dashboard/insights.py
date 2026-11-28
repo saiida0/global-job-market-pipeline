@@ -12,7 +12,6 @@ MIN_INSIGHT_SAMPLE = 10
 CLOUD_SKILLS = frozenset(
     {"aws", "amazon web services", "azure", "gcp", "google cloud platform"}
 )
-SOURCE_DISPLAY_NAMES = {"remotive": "Remotive", "jobicy": "Jobicy"}
 
 
 def cloud_demand_insight(jobs: pd.DataFrame) -> str:
@@ -38,19 +37,10 @@ def cloud_demand_insight(jobs: pd.DataFrame) -> str:
         )
         .sum()
     )
-    source_names = {
-        SOURCE_DISPLAY_NAMES.get(str(source).strip().casefold(), str(source).strip())
-        for source in tracked.get("source", pd.Series(dtype="object")).dropna()
-        if str(source).strip()
-    }
-    ordered_sources = [
-        name for name in ("Remotive", "Jobicy") if name in source_names
-    ] + sorted(source_names - {"Remotive", "Jobicy"}, key=str.casefold)
-    sources = " and ".join(ordered_sources) or "the available sources"
     share = 100 * cloud_jobs / sample_size
     return (
         f"Cloud skills appeared in {share:.1f}% of jobs with a tracked skill "
-        f"(n={sample_size}; sources: {sources})."
+        f"(n={sample_size})."
     )
 
 
@@ -100,76 +90,63 @@ def salary_gap_insight(jobs: pd.DataFrame) -> str:
             f"(n={min(python_count, other_count)})."
         )
 
-    source_names = {
-        SOURCE_DISPLAY_NAMES.get(str(source).strip().casefold(), str(source).strip())
-        for source in eligible.get("source", pd.Series(dtype="object")).dropna()
-        if str(source).strip()
-    }
-    ordered_sources = [
-        name for name in ("Remotive", "Jobicy") if name in source_names
-    ] + sorted(source_names - {"Remotive", "Jobicy"}, key=str.casefold)
-    sources = " and ".join(ordered_sources) or "the available sources"
     python_median = float(python_group["salary_estimate"].median())
     other_median = float(other_group["salary_estimate"].median())
+    if python_median == other_median:
+        return (
+            "Python and tracked-skill jobs without Python had the same median "
+            f"yearly USD salary of ${python_median:,.0f} "
+            f"(n={python_count} and n={other_count})."
+        )
     salary_difference = abs(python_median - other_median)
-    direction = "higher" if python_median >= other_median else "lower"
+    direction = "higher" if python_median > other_median else "lower"
+    difference_display = (
+        f"${salary_difference:,.0f}"
+        if salary_difference.is_integer()
+        else "$" + f"{salary_difference:,.2f}".rstrip("0").rstrip(".")
+    )
     return (
-        f"Across {sources}, Python jobs had a median yearly USD salary of "
-        f"${python_median:,.0f} (n={python_count}), ${salary_difference:,.0f} "
-        f"{direction} than tracked-skill jobs without Python "
+        f"Python jobs had a median yearly USD salary of ${python_median:,.0f} "
+        f"(n={python_count}), {difference_display} {direction} than "
+        f"tracked-skill jobs without Python "
         f"(median ${other_median:,.0f}; n={other_count})."
     )
 
 
-def source_difference_insight(jobs: pd.DataFrame) -> str:
-    """Describe the largest category-share difference between the two sources."""
-    if not isinstance(jobs, pd.DataFrame) or "source" not in jobs.columns:
+def salary_coverage_insight(jobs: pd.DataFrame) -> str:
+    """Describe salary listing coverage and the yearly USD chart sample."""
+    if not isinstance(jobs, pd.DataFrame):
         return "Not enough data for a reliable finding (n=0)."
-    source_keys = jobs["source"].fillna("").astype(str).str.strip().str.casefold()
-    remotive = jobs.loc[source_keys.eq("remotive")].copy()
-    jobicy = jobs.loc[source_keys.eq("jobicy")].copy()
-    remotive_count = len(remotive)
-    jobicy_count = len(jobicy)
-    if min(remotive_count, jobicy_count) < MIN_INSIGHT_SAMPLE:
-        return (
-            "Not enough data for a reliable finding "
-            f"(n={min(remotive_count, jobicy_count)})."
-        )
-    if "category" not in jobs.columns:
-        return (
-            "Not enough data for a reliable finding "
-            f"(n={min(remotive_count, jobicy_count)})."
-        )
+    sample_size = len(jobs)
+    if sample_size < MIN_INSIGHT_SAMPLE:
+        return f"Not enough data for a reliable finding (n={sample_size})."
 
-    remotive_categories = remotive["category"].fillna("Other").astype(str)
-    jobicy_categories = jobicy["category"].fillna("Other").astype(str)
-    categories = sorted(
-        set(remotive_categories) | set(jobicy_categories), key=str.casefold
+    minimum = pd.to_numeric(
+        jobs.get("salary_min", pd.Series(index=jobs.index, dtype="object")),
+        errors="coerce",
     )
-    shares = [
-        (
-            abs(
-                100 * remotive_categories.eq(category).sum() / remotive_count
-                - 100 * jobicy_categories.eq(category).sum() / jobicy_count
-            ),
-            category,
-            100 * remotive_categories.eq(category).sum() / remotive_count,
-            100 * jobicy_categories.eq(category).sum() / jobicy_count,
-        )
-        for category in categories
-    ]
-    if not shares:
-        return (
-            "Not enough data for a reliable finding "
-            f"(n={min(remotive_count, jobicy_count)})."
-        )
-    difference, category, remotive_share, jobicy_share = sorted(
-        shares, key=lambda value: (-value[0], value[1].casefold())
-    )[0]
+    maximum = pd.to_numeric(
+        jobs.get("salary_max", pd.Series(index=jobs.index, dtype="object")),
+        errors="coerce",
+    )
+    has_salary = minimum.notna() | maximum.notna()
+    salary_count = int(has_salary.sum())
+    salary_share = 100 * salary_count / sample_size
+
+    salary_type = jobs.get(
+        "salary_type", pd.Series(index=jobs.index, dtype="object")
+    ).fillna("").astype(str).str.strip().str.casefold()
+    currency = jobs.get(
+        "currency", pd.Series(index=jobs.index, dtype="object")
+    ).fillna("").astype(str).str.strip().str.upper()
+    yearly_usd = salary_type.eq("yearly") & currency.eq("USD") & has_salary
+    chart_used = jobs.get(
+        "salary_chart_used", pd.Series(False, index=jobs.index)
+    ).fillna(False).astype(bool)
+    chart_salary_count = int((yearly_usd & chart_used).sum())
     return (
-        f"The largest category-share gap was {category}: {remotive_share:.1f}% "
-        f"of Remotive jobs (n={remotive_count}) and {jobicy_share:.1f}% of "
-        f"Jobicy jobs (n={jobicy_count}), a {difference:.1f}-percentage-point gap."
+        f"{salary_count} of {sample_size} jobs ({salary_share:.1f}%) list a salary; "
+        f"{chart_salary_count} of them are yearly USD and used in the salary chart."
     )
 
 
@@ -199,19 +176,9 @@ def skill_pair_insight(jobs: pd.DataFrame) -> str:
                 display_names.setdefault(key, label)
         pair_counts.update(combinations(sorted(unique_skills), 2))
 
-    source_names = {
-        SOURCE_DISPLAY_NAMES.get(str(source).strip().casefold(), str(source).strip())
-        for source in tracked.get("source", pd.Series(dtype="object")).dropna()
-        if str(source).strip()
-    }
-    ordered_sources = [
-        name for name in ("Remotive", "Jobicy") if name in source_names
-    ] + sorted(source_names - {"Remotive", "Jobicy"}, key=str.casefold)
-    sources = " and ".join(ordered_sources) or "the available sources"
     if not pair_counts:
         return (
-            f"No tracked-skill pair appeared together among {sample_size} jobs "
-            f"(n={sample_size}; sources: {sources})."
+            f"No tracked-skill pair appeared together among n={sample_size} jobs."
         )
 
     pair, pair_count = sorted(
@@ -220,7 +187,7 @@ def skill_pair_insight(jobs: pd.DataFrame) -> str:
     return (
         f"The most common tracked-skill pair was {display_names[pair[0]]} and "
         f"{display_names[pair[1]]}, found together in {pair_count} jobs "
-        f"(n={sample_size}; sources: {sources})."
+        f"(n={sample_size})."
     )
 
 
@@ -236,34 +203,17 @@ def skill_match_insight(matches: pd.DataFrame) -> str:
     if matching_jobs < MIN_INSIGHT_SAMPLE:
         return f"Not enough data for a reliable finding (n={matching_jobs})."
 
-    raw_sources = first.get("sources", [])
-    if isinstance(raw_sources, str):
-        source_values = [value.strip() for value in raw_sources.split(",")]
-    elif isinstance(raw_sources, (list, tuple, set, frozenset)):
-        source_values = [str(value).strip() for value in raw_sources]
-    else:
-        source_values = []
-    source_names = {
-        SOURCE_DISPLAY_NAMES.get(value.casefold(), value)
-        for value in source_values
-        if value
-    }
-    ordered_sources = [
-        name for name in ("Remotive", "Jobicy") if name in source_names
-    ] + sorted(source_names - {"Remotive", "Jobicy"}, key=str.casefold)
-    sources = " and ".join(ordered_sources) or "the available sources"
-
     if "job_count" not in matches.columns:
         return (
             f"No unchosen tracked skill appeared among {matching_jobs} matching "
-            f"jobs (n={matching_jobs}; sources: {sources})."
+            f"jobs (n={matching_jobs})."
         )
     numeric_counts = pd.to_numeric(matches["job_count"], errors="coerce")
     candidates = matches.loc[numeric_counts.fillna(0) > 0].copy()
     if candidates.empty:
         return (
             f"No unchosen tracked skill appeared among {matching_jobs} matching "
-            f"jobs (n={matching_jobs}; sources: {sources})."
+            f"jobs (n={matching_jobs})."
         )
     candidates["_job_count"] = numeric_counts.loc[candidates.index]
     candidates = candidates.assign(
@@ -284,5 +234,5 @@ def skill_match_insight(matches: pd.DataFrame) -> str:
     return (
         f"Among jobs matching at least one chosen skill, the most common missing "
         f"tracked skill was {skill}, found in {skill_jobs} of n={matching_jobs} "
-        f"matching jobs ({share:.1f}%; sources: {sources})."
+        f"matching jobs ({share:.1f}%)."
     )

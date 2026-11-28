@@ -14,10 +14,11 @@ import streamlit as st
 
 from dashboard.insights import (
     cloud_demand_insight,
+    salary_coverage_insight,
     salary_gap_insight,
     skill_pair_insight,
-    source_difference_insight,
 )
+from dashboard.insight_format import add_selected_source
 from dashboard.queries import (
     MIN_SALARY_JOBS_PER_CATEGORY,
     ROLE_FOCUS_OPTIONS,
@@ -188,8 +189,12 @@ with skills_column:
         f"Based on {tracked_jobs:,} jobs with at least one tracked skill "
         f"(of {len(selected_jobs):,} jobs)"
     )
-    st.caption(cloud_demand_insight(insight_job_rows))
-    st.caption(skill_pair_insight(insight_job_rows))
+    st.caption(
+        add_selected_source(cloud_demand_insight(insight_job_rows), selected_sources)
+    )
+    st.caption(
+        add_selected_source(skill_pair_insight(insight_job_rows), selected_sources)
+    )
 
 with category_column:
     st.subheader("Jobs per category")
@@ -224,7 +229,6 @@ with category_column:
             alt="Job counts by shared category, highest count first",
         )
     st.caption(f"Based on {len(selected_jobs):,} jobs")
-    st.caption(source_difference_insight(insight_job_rows))
 
 salary_column, posting_column = st.columns(2)
 with salary_column:
@@ -280,7 +284,19 @@ with salary_column:
         "when both are listed, or its available bound when only one is listed. "
         f"Categories with fewer than {MIN_SALARY_JOBS_PER_CATEGORY} salary jobs are hidden."
     )
-    st.caption(salary_gap_insight(insight_job_rows))
+    salary_chart_categories = set(salary_data["category"].astype(str))
+    salary_coverage_rows = insight_job_rows.copy()
+    salary_coverage_rows["salary_chart_used"] = salary_coverage_rows[
+        "category"
+    ].astype(str).isin(salary_chart_categories)
+    st.caption(
+        add_selected_source(
+            salary_coverage_insight(salary_coverage_rows), selected_sources
+        )
+    )
+    st.caption(
+        add_selected_source(salary_gap_insight(insight_job_rows), selected_sources)
+    )
 
 with posting_column:
     st.subheader("Postings per day")
@@ -292,7 +308,11 @@ with posting_column:
             alt.Chart(posting_data)
             .mark_line(color=CHART_ACCENT_COLOR)
             .encode(
-                x=alt.X("publication_day:T", title="Date posted"),
+                x=alt.X(
+                    "publication_day:T",
+                    title="Date posted",
+                    axis=alt.Axis(format="%b %d"),
+                ),
                 y=alt.Y(
                     "job_count:Q",
                     title="Number of jobs",

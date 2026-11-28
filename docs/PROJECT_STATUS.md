@@ -30,10 +30,13 @@ combined run totals and exits unsuccessfully if either source fails.
   results for 300 seconds. The app adds the project root to `sys.path` so this
   command works when launched from the project root.
 - Adds deterministic analyst captions for tracked-skill cloud demand, yearly
-  USD salary medians by Python skill, category mix by source, common tracked
-  skill pairs, and the leading unchosen skill in Skill Match. Captions show
-  their sample sizes and source coverage; samples below ten use a fixed
-  insufficient-data sentence.
+  USD salary medians by Python skill, salary listing coverage, common tracked
+  skill pairs, and the leading unchosen skill in Skill Match. Samples below ten
+  use a fixed insufficient-data sentence; a single selected overview source is
+  named at the end of each finding.
+- The salary coverage finding counts listings with any salary, then counts
+  yearly USD rows included in the displayed salary chart categories. Equal
+  Python and non-Python salary medians are described as the same.
 - Market Overview has an “About this data” expander describing the two source
   windows, the tech-focused skill dictionary, yearly USD salary coverage, and
   the project's private, non-commercial scope.
@@ -44,8 +47,8 @@ combined run totals and exits unsuccessfully if either source fails.
 - The Role focus radio filters all charts and listings to software development,
   data and analytics, and AI and machine learning roles when selected.
 - Daily posting counts use a continuous UTC date axis and one compact panel per
-  source with independent y-scales. Counts reflect each source's fetch window,
-  not total market volume.
+  source with independent y-scales and `Mon DD` labels. Counts reflect each
+  source's fetch window, not total market volume.
 - Category chart labels put sample counts first (for example, `n=45 · Sales`)
   and use expanded y-axis label limits so full category names remain visible.
   Salary category bars also show the salary job count in each tooltip, extend the

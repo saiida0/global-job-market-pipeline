@@ -5,6 +5,7 @@ import pandas as pd
 import pytest
 
 from dashboard import insights
+from dashboard.insight_format import add_selected_source
 
 
 @pytest.fixture
@@ -41,16 +42,25 @@ def salary_jobs():
 
 
 @pytest.fixture
-def source_jobs():
+def salary_coverage_jobs():
     rows = []
     for index in range(20):
-        if index < 10:
-            source = "remotive"
-            category = "Software Development" if index < 8 else "Data and Analytics"
-        else:
-            source = "jobicy"
-            category = "Software Development" if index < 12 else "Data and Analytics"
-        rows.append({"source": source, "category": category})
+        row = {
+            "salary_min": None,
+            "salary_max": None,
+            "salary_type": None,
+            "currency": None,
+            "salary_chart_used": index < 10,
+        }
+        if index < 11:
+            row.update(
+                salary_min=100_000 + index * 1_000,
+                salary_type="yearly",
+                currency="USD",
+            )
+        elif index == 11:
+            row.update(salary_min=40_000, salary_type="monthly", currency="EUR")
+        rows.append(row)
     return pd.DataFrame(rows)
 
 
@@ -93,6 +103,9 @@ def assert_plain_analyst_sentence(sentence):
     assert sentence.endswith(".")
     assert "!" not in sentence
     assert not re.search(r"\b(significant|impressive|robust|strong)\b", sentence, re.I)
+    assert "(sources:" not in sentence.casefold()
+    assert "remotive" not in sentence.casefold()
+    assert "jobicy" not in sentence.casefold()
     assert not any(
         0x1F000 <= ord(character) <= 0x1FAFF
         or 0x2600 <= ord(character) <= 0x27BF
@@ -109,18 +122,17 @@ def test_insights_module_exposes_exactly_five_findings():
     assert names == {
         "cloud_demand_insight",
         "salary_gap_insight",
-        "source_difference_insight",
+        "salary_coverage_insight",
         "skill_pair_insight",
         "skill_match_insight",
     }
 
 
-def test_cloud_demand_insight_reports_share_and_source_sample(cloud_jobs):
+def test_cloud_demand_insight_reports_share_and_sample(cloud_jobs):
     sentence = insights.cloud_demand_insight(cloud_jobs)
 
     assert sentence == (
-        "Cloud skills appeared in 40.0% of jobs with a tracked skill "
-        "(n=20; sources: Remotive and Jobicy)."
+        "Cloud skills appeared in 40.0% of jobs with a tracked skill (n=20)."
     )
     assert_plain_analyst_sentence(sentence)
 
@@ -129,21 +141,37 @@ def test_salary_gap_insight_uses_yearly_usd_and_both_group_counts(salary_jobs):
     sentence = insights.salary_gap_insight(salary_jobs)
 
     assert sentence == (
-        "Across Remotive and Jobicy, Python jobs had a median yearly USD salary "
-        "of $105,500 (n=12), $8,000 higher than tracked-skill jobs without "
+        "Python jobs had a median yearly USD salary of $105,500 (n=12), "
+        "$8,000 higher than tracked-skill jobs without "
         "Python (median $97,500; n=12)."
     )
     assert_plain_analyst_sentence(sentence)
 
 
-def test_source_difference_insight_reports_category_shares_and_each_n(source_jobs):
-    sentence = insights.source_difference_insight(source_jobs)
+def test_salary_coverage_insight_counts_chart_eligible_salary_rows(
+    salary_coverage_jobs,
+):
+    sentence = insights.salary_coverage_insight(salary_coverage_jobs)
 
     assert sentence == (
-        "The largest category-share gap was Data and Analytics: 20.0% of "
-        "Remotive jobs (n=10) and 80.0% of Jobicy jobs (n=10), a "
-        "60.0-percentage-point gap."
+        "12 of 20 jobs (60.0%) list a salary; 10 of them are yearly USD and "
+        "used in the salary chart."
     )
+    assert_plain_analyst_sentence(sentence)
+
+
+def test_salary_gap_equal_medians_says_they_are_the_same(salary_jobs):
+    equal_salary_jobs = salary_jobs.copy()
+    equal_salary_jobs["salary_min"] = 95_000
+    equal_salary_jobs["salary_max"] = 95_000
+
+    sentence = insights.salary_gap_insight(equal_salary_jobs)
+
+    assert sentence == (
+        "Python and tracked-skill jobs without Python had the same median yearly "
+        "USD salary of $95,000 (n=12 and n=12)."
+    )
+    assert "$0 higher" not in sentence
     assert_plain_analyst_sentence(sentence)
 
 
@@ -152,18 +180,18 @@ def test_skill_pair_insight_counts_jobs_with_the_pair(paired_jobs):
 
     assert sentence == (
         "The most common tracked-skill pair was Python and SQL, found "
-        "together in 12 jobs (n=12; sources: Remotive and Jobicy)."
+        "together in 12 jobs (n=12)."
     )
     assert_plain_analyst_sentence(sentence)
 
 
-def test_skill_match_insight_reports_missing_skill_share_and_sources(skill_match_rows):
+def test_skill_match_insight_reports_missing_skill_share(skill_match_rows):
     sentence = insights.skill_match_insight(skill_match_rows)
 
     assert sentence == (
         "Among jobs matching at least one chosen skill, the most common missing "
         "tracked skill was SQL, found in 12 of n=20 matching jobs "
-        "(60.0%; sources: Remotive and Jobicy)."
+        "(60.0%)."
     )
     assert_plain_analyst_sentence(sentence)
 
@@ -198,7 +226,7 @@ def test_all_insights_use_the_small_sample_fallback():
     sentences = [
         insights.cloud_demand_insight(small_jobs),
         insights.salary_gap_insight(small_jobs),
-        insights.source_difference_insight(small_jobs),
+        insights.salary_coverage_insight(small_jobs),
         insights.skill_pair_insight(small_jobs),
         insights.skill_match_insight(small_matches),
     ]
@@ -206,7 +234,7 @@ def test_all_insights_use_the_small_sample_fallback():
     assert sentences == [
         "Not enough data for a reliable finding (n=9).",
         "Not enough data for a reliable finding (n=4).",
-        "Not enough data for a reliable finding (n=4).",
+        "Not enough data for a reliable finding (n=9).",
         "Not enough data for a reliable finding (n=9).",
         "Not enough data for a reliable finding (n=9).",
     ]
@@ -219,7 +247,7 @@ def test_all_insights_use_the_small_sample_fallback():
     [
         insights.cloud_demand_insight,
         insights.salary_gap_insight,
-        insights.source_difference_insight,
+        insights.salary_coverage_insight,
         insights.skill_pair_insight,
         insights.skill_match_insight,
     ],
@@ -229,3 +257,14 @@ def test_empty_input_returns_a_sentence_without_claims(function):
 
     assert sentence == "Not enough data for a reliable finding (n=0)."
     assert_plain_analyst_sentence(sentence)
+
+
+def test_single_selected_source_is_added_as_a_suffix():
+    sentence = "Cloud skills appeared in 40.0% of jobs with a tracked skill (n=20)."
+
+    assert add_selected_source(sentence, ["Remotive"]) == (
+        "Cloud skills appeared in 40.0% of jobs with a tracked skill "
+        "(n=20); Source: Remotive."
+    )
+    assert add_selected_source(sentence, ["Remotive", "Jobicy"]) == sentence
+    assert add_selected_source(sentence, []) == sentence
